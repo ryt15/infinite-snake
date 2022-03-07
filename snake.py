@@ -38,16 +38,16 @@ import pdb
 import re
 
 # Exit codes
-EXIT_OK     = 0     # All is well
-EXIT_SYNTAX = 1     # Invalid command-line syntax
-EXIT_ARGS   = 2     # Invalid arguments
-EXIT_SIGNAL = 3     # Termination signal received
+EXIT_OK = 0     # All is well
+EXIT_SYNTAX = 1 # Invalid command-line syntax
+EXIT_ARGS = 2   # Invalid arguments
+EXIT_SIGNAL = 3 # Termination signal received
 
 # Configuration CLI switches, config file keys and defaults
 CNFKEY_ROWS = ['r', 'rows', 10]      # Playground size - rows
 CNFKEY_COLS = ['c', 'cols', 20]      # Playground size - columns
-CNFKEY_SLEN = ['l', 'snakelen', 3 ]  # Initial snake length
-CNFKEY_TIMO = ['t', 'timeout', 300 ] # Time in ms between snake moves
+CNFKEY_SLEN = ['l', 'snakelen', 3]   # Initial snake length
+CNFKEY_TIMO = ['t', 'timeout', 300]  # Time in ms between snake moves
 
 # Configurable values
 cnfval_rows = CNFKEY_ROWS[2]
@@ -82,47 +82,48 @@ class Display:
         program, to restore the display. This is done by calling
         without parameters.
         """
-        global graphics_active
         mode = False if rows < 1 or cols < 1 else True
-        if False == mode:
+        if not mode:
             # Deactivate curses
             if self.graphics_active:
                 curses.endwin()
                 self.graphics_active = False
             return None
-        else:
-            # Activate curses
-            if not self.graphics_active:
-                # Playground too small?
-                if (rows < 3):
-                    errprint("Can't make playground " + str(rows) + " rows.")
-                    errprint("Minimum row size is 3.")
-                    exit(EXIT_ARGS)
-                if (cols < 3):
-                    errprint("Can't make playground " + str(cols) + " columns.")
-                    errprint("Minimum column size is 3.")
-                    exit(EXIT_ARGS)
-                # Initialize display
-                scr = curses.initscr()
-                curses.curs_set(0)
-                srows, scols = scr.getmaxyx()
-                # Playground too large?
-                if (rows > srows):
-                    curses.endwin()
-                    errprint("Can't make playground " + str(rows) + " rows.")
-                    errprint("Maximum row size is " + str(srows) + ".")
-                    exit(EXIT_ARGS)
-                if (cols > scols):
-                    curses.endwin()
-                    errprint("Can't make playground " + str(cols) + " columns.")
-                    errprint("Maximum column size is " + str(scols) + ".")
-                    exit(EXIT_ARGS)
-                # Create the playground on the display
-                win = curses.newwin(rows, cols, 0, 0)
-                win.keypad(1)
-                win.timeout(timo)
-                self.graphics_active = True
-                return win
+
+        # Activate curses
+        if self.graphics_active:
+            return self.win
+
+        # Playground too small?
+        if rows < 3:
+            errprint("Can't make playground " + str(rows) + " rows.")
+            errprint("Minimum row size is 3.")
+            sys.exit(EXIT_ARGS)
+        if cols < 3:
+            errprint("Can't make playground " + str(cols) + " columns.")
+            errprint("Minimum column size is 3.")
+            sys.exit(EXIT_ARGS)
+        # Initialize display
+        scr = curses.initscr()
+        curses.curs_set(0)
+        srows, scols = scr.getmaxyx()
+        # Playground too large?
+        if rows > srows:
+            curses.endwin()
+            errprint("Can't make playground " + str(rows) + " rows.")
+            errprint("Maximum row size is " + str(srows) + ".")
+            sys.exit(EXIT_ARGS)
+        if cols > scols:
+            curses.endwin()
+            errprint("Can't make playground " + str(cols) + " columns.")
+            errprint("Maximum column size is " + str(scols) + ".")
+            sys.exit(EXIT_ARGS)
+        # Create the playground on the display
+        win = curses.newwin(rows, cols, 0, 0)
+        win.keypad(1)
+        win.timeout(timo)
+        self.graphics_active = True
+        return win
 
 
 class Playground:
@@ -171,8 +172,8 @@ class Playground:
             foodpos = [random.randint(1, self.rows - 2), \
                     random.randint(1, self.cols - 2)]
             cell = self.atpos(foodpos[0], foodpos[1])
-            if (self.OBJ_EMPTY == cell & \
-                (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
+            if self.OBJ_EMPTY == cell & \
+                (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE):
                 break
         self.markpos(foodpos[0], foodpos[1], self.OBJ_FOOD)
         self.win.addch(foodpos[0], foodpos[1], self.VIS_FOOD)
@@ -185,8 +186,8 @@ class Playground:
             bombpos = [random.randint(1, self.rows - 2), \
                     random.randint(1, self.cols - 2)]
             cell = self.atpos(bombpos[0], bombpos[1])
-            if (self.OBJ_EMPTY == cell & \
-                (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
+            if self.OBJ_EMPTY == cell & \
+                (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE):
                 break
         self.markpos(bombpos[0], bombpos[1], self.OBJ_BOMB)
         self.win.addch(bombpos[0], bombpos[1], self.VIS_BOMB)
@@ -204,7 +205,7 @@ class Playground:
         for pp in range(0, len(self.postoclean)):
             self.win.addch(int(self.postoclean[pp][0]), \
                 int(self.postoclean[pp][1]), self.VIS_CLEANER)
-        if (need_refresh):
+        if need_refresh:
             self.win.refresh()
 
 
@@ -305,13 +306,13 @@ class Worm:
         newhead = [self.poss[0][0] + self.rowstep, \
                    self.poss[0][1] + self.colstep]
         cell = self.pg.atpos(newhead[0], newhead[1])
-        if (cell):
+        if cell:
             self.pg.win.refresh()
-        if (cell & pg.OBJ_SNAKE):
+        if cell & pg.OBJ_SNAKE:
             return self.FAIL_HITSNAKE
-        if (cell & pg.OBJ_BOMB):
+        if cell & pg.OBJ_BOMB:
             return self.FAIL_HITBOMB
-        if (cell & pg.OBJ_FOOD):
+        if cell & pg.OBJ_FOOD:
             pg.unmarkpos(self.poss[0][0], self.poss[0][1], pg.OBJ_FOOD)
             pg.feed()
             self.inclen()
@@ -320,17 +321,17 @@ class Worm:
         if len(self.poss) > self.length:
             l = len(self.poss) - 1
             pg.setcleanpos(self.poss[l])
-            pg.unmarkpos(self.poss[l][0], self.poss[l][1], pg.OBJ_SNAKE);
+            pg.unmarkpos(self.poss[l][0], self.poss[l][1], pg.OBJ_SNAKE)
             self.poss.pop(l)
         # Check that snake is still inside the playground.
         # Actually we can also check if (cell & pg.BORDER)
-        if (self.poss[0][0] < 1): # Hit top
-            return self.FAIL_HITTOP
-        if (self.poss[0][1] < 1): # Hit left
+        if self.poss[0][0] < 1: # Hit top
+            return self.FAIL_HITHIGH
+        if self.poss[0][1] < 1: # Hit left
             return self.FAIL_HITLEFT
-        if (self.poss[0][0] >= pg.rows - 1): # Hit bottom
+        if self.poss[0][0] >= pg.rows - 1: # Hit bottom
             return self.FAIL_HITLOW
-        if (self.poss[0][1] >= pg.cols - 1): # Hit right
+        if self.poss[0][1] >= pg.cols - 1: # Hit right
             return self.FAIL_HITRIGHT
         return self.FAIL_NONE
 
@@ -402,13 +403,13 @@ def readconf():
         fp.close()
     except FileNotFoundError:
         errprint("Non-existing configuration file: " + conffile)
-        exit(EXIT_ARGS)
+        sys.exit(EXIT_ARGS)
     except PermissionError:
         errprint("Unreadable configuration file: " + conffile)
-        exit(EXIT_ARGS)
+        sys.exit(EXIT_ARGS)
     except IsADirectoryError:
         errprint("Configuration file is a directory: " + conffile)
-        exit(EXIT_ARGS)
+        sys.exit(EXIT_ARGS)
 
     kv = re.compile('^[a-z]+: [a-zA-Z0-9]+')
     for line in cnf:
@@ -434,12 +435,12 @@ try:
         if '-h' == sys.argv[arg]:
             # Show help and exit
             Help.usage()
-            exit(EXIT_OK)
+            sys.exit(EXIT_OK)
         if '-C' == sys.argv[arg]:
             # Read configuration from file
             if conffile:
                 errprint("-C can only be used once!")
-                exit(EXIT_SYNTAX)
+                sys.exit(EXIT_SYNTAX)
             arg += 1
             conffile = sys.argv[arg]
             readconf()
@@ -462,11 +463,11 @@ try:
 except IndexError:
     errprint("Invalid arguments!")
     Help.usage()
-    exit(EXIT_SYNTAX)
+    sys.exit(EXIT_SYNTAX)
 except ValueError:
     errprint("Invalid argument or config value!")
     Help.usage()
-    exit(EXIT_SYNTAX)
+    sys.exit(EXIT_SYNTAX)
 
 
 # Initialize display and playground
@@ -485,9 +486,10 @@ atexit.register(exithand)
 # Signal trapping
 
 def sighand(signum, frame):
+    """ Signal handler callback """
     pg.display.graphact()
     errprint("Interrupted")
-    exit(EXIT_SIGNAL)
+    sys.exit(EXIT_SIGNAL)
 
 signal.signal(signal.SIGINT, sighand)
 signal.signal(signal.SIGHUP, sighand)
@@ -516,4 +518,4 @@ pg.keypause()
 pg.display.graphact()
 print("Score: " + str(worm.getscore()))
 
-exit(EXIT_OK)
+sys.exit(EXIT_OK)

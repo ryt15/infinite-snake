@@ -50,12 +50,6 @@ CNFKEY_COLS = ['c', 'cols', 20]      # Playground size - columns
 CNFKEY_SLEN = ['l', 'snakelen', 3]   # Initial snake length
 CNFKEY_TIMO = ['t', 'timeout', 300]  # Time in ms between snake moves
 
-# Configurable values
-cnfval_rows = CNFKEY_ROWS[2]
-cnfval_cols = CNFKEY_COLS[2]
-cnfval_slen = CNFKEY_SLEN[2]
-cnfval_timo = CNFKEY_TIMO[2]
-
 
 
 def errprint(*args, **kargs):
@@ -148,23 +142,24 @@ class Playground:
     OBJ_SNAKE = 16  # There's a snake (head or body) here
 
 
-    def __init__(self, rows, cols, timo):
-        self.rows = rows    # Size in rows, including borders
-        self.cols = cols    # Size in columns, including borders
-        self.timo = timo    # Time in ms between movements
-        self.pg = [[self.OBJ_EMPTY for cc in range(cols)] for rr in range(rows)]
-        self.display = Display(rows, cols, timo)
+    def __init__(self, cnf):
+        self.rows = cnf.getconf(CNFKEY_ROWS[1])
+        self.cols = cnf.getconf(CNFKEY_COLS[1])
+        self.timo = cnf.getconf(CNFKEY_TIMO[1])
+        self.pg = [[self.OBJ_EMPTY for cc in range(self.cols)] \
+            for rr in range(self.rows)]
+        self.display = Display(self.rows, self.cols, self.timo)
         self.win = self.display.win
         self.postoclean = [] # Positions needed to be cleaned
         # Mark borders
         # horizontal borders
-        for cc in range(cols):
+        for cc in range(self.cols):
             self.pg[0][cc] = self.OBJ_BORDER
-            self.pg[rows - 1][cc] = self.OBJ_BORDER
+            self.pg[self.rows - 1][cc] = self.OBJ_BORDER
         # vertical borders
-        for rr in range(rows):
+        for rr in range(self.rows):
             self.pg[rr][0] = self.OBJ_BORDER
-            self.pg[rr][cols - 1] = self.OBJ_BORDER
+            self.pg[rr][self.cols - 1] = self.OBJ_BORDER
 
 
     def feed(self):
@@ -252,7 +247,6 @@ class Playground:
 
 class Worm:
     """ A Snake/Worm that crawls across the Playground """
-    global cnfval_slen
     # Movement directions
     STEP_UP = -1            # Row movement direction - up
     STEP_DOWN = 1           # Row movement direction - down
@@ -282,10 +276,11 @@ class Worm:
     }
 
 
-    def __init__(self, playground, length, \
+    def __init__(self, playground, cnf, \
         row=None, col=None, rstep=None, cstep=None):
         self.pg = playground    # Current playground
-        self.length = length    # Expected length
+        self.cnf = cnf          # Configuration
+        self.length = cnf.getconf(CNFKEY_SLEN[1])    # Expected length
         self.curlen = 1         # Current length including head
         # Set initial moving direction
         self.rowstep = rstep if rstep is not None else self.STEP_IDLE
@@ -298,7 +293,7 @@ class Worm:
 
     def inclen(self):
         """ Increment length of snake """
-        self.length += cnfval_slen
+        self.length += self.cnf.getconf(CNFKEY_SLEN[1])
 
 
     def draw(self):
@@ -395,7 +390,8 @@ class Worm:
                 self.draw()
 
         # Show the score
-        pg.win.addstr(cnfval_rows - 1, 1, " Score: " + str(self.score) + " ")
+        res_row = int(self.cnf.getconf(CNFKEY_ROWS[1])) - 1
+        pg.win.addstr(res_row, 1, " Score: " + str(self.score) + " ")
         self.draw()
         return self.fail
 
@@ -417,47 +413,80 @@ class Help:
 
 # Configuration
 
-conffile = None     # Configuration file
+class Config:
+    """ Configuration of one game instance """
 
-def readconf():
-    """ Process configuration file """
-    global cnfval_rows
-    global cnfval_cols
-    global cnfval_slen
-    global cnfval_timo
+    def __init__(self, conffile=None):
+        self.conffile = conffile     # Configuration file
+        self.cnfval_rows = CNFKEY_ROWS[2]
+        self.cnfval_cols = CNFKEY_COLS[2]
+        self.cnfval_slen = CNFKEY_SLEN[2]
+        self.cnfval_timo = CNFKEY_TIMO[2]
+        if conffile is not None:
+            self.readconf(conffile)
 
-    try:
-        fp = open(conffile)
-        cnf = fp.readlines()
-        fp.close()
-    except FileNotFoundError:
-        errprint("Non-existing configuration file: " + conffile)
-        sys.exit(EXIT_ARGS)
-    except PermissionError:
-        errprint("Unreadable configuration file: " + conffile)
-        sys.exit(EXIT_ARGS)
-    except IsADirectoryError:
-        errprint("Configuration file is a directory: " + conffile)
-        sys.exit(EXIT_ARGS)
+    def readconf(self, conffile=None):
+        """ Process configuration file """
+        self.conffile = conffile if conffile is not None else "snake.cnf"
 
-    kv = re.compile('^[a-z]+: [a-zA-Z0-9]+')
-    for line in cnf:
-        if not kv.match(line):
-            continue
-        keypos = re.search(r"\s", line).start()
-        key = line[:keypos - 1]
-        val = line[keypos:].strip()
+        try:
+            fp = open(self.conffile)
+            cnf = fp.readlines()
+            fp.close()
+        except FileNotFoundError:
+            errprint("Non-existing configuration file: " + self.conffile)
+            sys.exit(EXIT_ARGS)
+        except PermissionError:
+            errprint("Unreadable configuration file: " + self.conffile)
+            sys.exit(EXIT_ARGS)
+        except IsADirectoryError:
+            errprint("Configuration file is a directory: " + self.conffile)
+            sys.exit(EXIT_ARGS)
+
+        kv = re.compile('^[a-z]+: [a-zA-Z0-9]+')
+        for line in cnf:
+            if not kv.match(line):
+                continue
+            keypos = re.search(r"\s", line).start()
+            key = line[:keypos - 1]
+            val = line[keypos:].strip()
+            self.setconf(key, val)
+
+    def setconf(self, key, val):
+        """ Assign configurable value to a key """
         if CNFKEY_ROWS[1] == key:
-            cnfval_rows = int(val)
+            self.cnfval_rows = int(val)
+            return
         if CNFKEY_COLS[1] == key:
-            cnfval_cols = int(val)
+            self.cnfval_cols = int(val)
+            return
         if CNFKEY_SLEN[1] == key:
-            cnfval_slen = int(val)
+            self.cnfval_slen = int(val)
+            return
         if CNFKEY_TIMO[1] == key:
-            cnfval_timo = int(val)
+            self.cnfval_timo = int(val)
+            return
+        errprint("Invalid setconf(key=" + key + ")!")
+        sys.exit(EXIT_PROG)
+
+    def getconf(self, key):
+        """ Return a configuration value """
+        if CNFKEY_ROWS[1] == key:
+            return self.cnfval_rows
+        if CNFKEY_COLS[1] == key:
+            return self.cnfval_cols
+        if CNFKEY_SLEN[1] == key:
+            return self.cnfval_slen
+        if CNFKEY_TIMO[1] == key:
+            return self.cnfval_timo
+        errprint("Invalid getconf(key=" + key + ")!")
+        sys.exit(EXIT_PROG)
 
 
 # Command line options and switches
+
+conf = Config()
+gotconf = False
 
 try:
     for arg in range(1, len(sys.argv)):
@@ -467,28 +496,28 @@ try:
             sys.exit(EXIT_OK)
         if '-C' == sys.argv[arg]:
             # Read configuration from file
-            if conffile:
+            if gotconf:
                 errprint("-C can only be used once!")
                 sys.exit(EXIT_SYNTAX)
             arg += 1
-            conffile = sys.argv[arg]
-            readconf()
+            conf.readconf(sys.argv[arg])
+            gotconf = True
         if '-' + CNFKEY_ROWS[0] == sys.argv[arg]:
             # Set number of rows on playground
             arg += 1
-            cnfval_rows = int(sys.argv[arg])
+            conf.setconf(CNFKEY_ROWS[1], sys.argv[arg])
         if '-' + CNFKEY_COLS[0] == sys.argv[arg]:
             # Set number of columns on playground
             arg += 1
-            cnfval_cols = int(sys.argv[arg])
+            conf.setconf(CNFKEY_COLS[1], sys.argv[arg])
         if '-' + CNFKEY_SLEN[0] == sys.argv[arg]:
             # Set initial snake length
             arg += 1
-            cnfval_slen = int(sys.argv[arg])
+            conf.setconf(CNFKEY_SLEN[1], sys.argv[arg])
         if '-' + CNFKEY_TIMO[0] == sys.argv[arg]:
             # Timeout in ms between movements
             arg += 1
-            cnfval_timo = int(sys.argv[arg])
+            conf.setconf(CNFKEY_TIMO[1], sys.argv[arg])
 except IndexError:
     errprint("Invalid arguments!")
     Help.usage()
@@ -500,7 +529,7 @@ except ValueError:
 
 
 # Initialize display and playground
-pg = Playground(cnfval_rows, cnfval_cols, cnfval_timo)
+pg = Playground(conf)
 
 
 # Cleanup
@@ -532,7 +561,7 @@ pg.draw()   # Draw complete playground
 
 
 # Create one snake
-worm = Worm(pg, cnfval_slen)
+worm = Worm(pg, conf)
 # Determine initial moving direction
 worm.turn(worm.STEP_UP, worm.STEP_IDLE)
 # Draw the snake initially

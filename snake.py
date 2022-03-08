@@ -268,7 +268,7 @@ class Worm:
     FAIL_HITLEFT = 3        # Hit left border
     FAIL_HITRIGHT = 4       # Hit right border
     FAIL_HITSNAKE = 5       # Hit a snake
-    FAIL_HITBOMB = 5        # Hit a bomb
+    FAIL_HITBOMB = 6        # Hit a bomb
 
 
     def __init__(self, pg, length, row=None, col=None, rstep=None, cstep=None):
@@ -348,7 +348,7 @@ class Worm:
 
 
     def play(self):
-        """ Main loop """
+        """ Main loop. Returns failure as FAIL_-mnemonic """
         fail = self.FAIL_NONE
         while self.FAIL_NONE == fail:
             key = self.pg.win.getch()

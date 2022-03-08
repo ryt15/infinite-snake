@@ -36,12 +36,14 @@ import curses
 import atexit
 import pdb
 import re
+import traceback
 
 # Exit codes
 EXIT_OK = 0     # All is well
 EXIT_SYNTAX = 1 # Invalid command-line syntax
 EXIT_ARGS = 2   # Invalid arguments
 EXIT_SIGNAL = 3 # Termination signal received
+EXIT_PROG = 4   # Program error - debugging required!
 
 # Configuration CLI switches, config file keys and defaults
 CNFKEY_ROWS = ['r', 'rows', 10]      # Playground size - rows
@@ -269,6 +271,16 @@ class Worm:
     FAIL_HITRIGHT = 4       # Hit right border
     FAIL_HITSNAKE = 5       # Hit a snake
     FAIL_HITBOMB = 6        # Hit a bomb
+    # Fail texts
+    FAILTEXT = {
+        FAIL_NONE:     "Success",
+        FAIL_HITHIGH:  "Hit top border",
+        FAIL_HITLOW:   "Hit lower border",
+        FAIL_HITLEFT:  "Hit left border",
+        FAIL_HITRIGHT: "Hit right border",
+        FAIL_HITSNAKE: "Hit a snake",
+        FAIL_HITBOMB:  "Hit a bomb"
+    }
 
 
     def __init__(self, pg, length, row=None, col=None, rstep=None, cstep=None):
@@ -281,7 +293,8 @@ class Worm:
         # Set initial head position
         self.poss = [[row if row != None else pg.rows / 2, \
                       col if col != None else pg.cols / 2]]
-        self.score = 0
+        self.score = 0              # Score counter
+        self.fail = self.FAIL_NONE  # Reason for Game Over
 
     def inclen(self):
         """ Increment length of snake """
@@ -347,10 +360,26 @@ class Worm:
         return self.score
 
 
+    def getfailtext(self, fail = -1) -> str:
+       """ Convert fail code (FAIL_-mnemonic) to text.
+       Without parameter, the object's failure text is returned.
+       With parameter, requested code is converted to text.
+       """
+       if -1 == fail:
+           return self.FAILTEXT[self.fail]
+       try:
+           return self.FAILTEXT[fail]
+       except KeyError:
+           errprint("Program error - illegal index (" + str(fail) + ")")
+           # for line in traceback.format_stack():
+           line = traceback.format_stack()[0]
+           errprint(line.strip())
+           sys.exit(EXIT_PROG)
+
+
     def play(self):
         """ Main loop. Returns failure as FAIL_-mnemonic """
-        fail = self.FAIL_NONE
-        while self.FAIL_NONE == fail:
+        while self.FAIL_NONE == self.fail:
             key = self.pg.win.getch()
             if curses.KEY_DOWN == key:
                 self.turn(self.STEP_DOWN)
@@ -360,15 +389,15 @@ class Worm:
                 self.turn(None, self.STEP_RIGHT)
             if curses.KEY_UP == key:
                 self.turn(self.STEP_UP)
-            fail = self.step()
-            if not fail:
+            self.fail = self.step()
+            if not self.fail:
                 self.score += 1
                 self.draw()
 
         # Show the score
         pg.win.addstr(cnfval_rows - 1, 1, " Score: " + str(self.score) + " ")
         self.draw()
-        return fail
+        return self.fail
 
 
 class Help:
@@ -510,12 +539,13 @@ worm.turn(worm.STEP_UP, worm.STEP_IDLE)
 worm.draw()
 
 # Start playing
-fail = worm.play()
+worm.play()
 
 pg.keypause()
 
 # Display score
 pg.display.graphact()
-print("Score: " + str(worm.getscore()))
+print("Score:   " + str(worm.getscore()))
+print("Failure: " + worm.getfailtext())
 
 sys.exit(EXIT_OK)

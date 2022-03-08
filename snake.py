@@ -30,13 +30,12 @@ For Python version 3.8
 
 import sys
 import signal
-import time
 import random
 import curses
 import atexit
-import pdb
 import re
 import traceback
+# import pdb
 
 # Exit codes
 EXIT_OK = 0     # All is well
@@ -84,7 +83,7 @@ class Display:
         program, to restore the display. This is done by calling
         without parameters.
         """
-        mode = False if rows < 1 or cols < 1 else True
+        mode = bool(rows > 0 and cols > 0)
         if not mode:
             # Deactivate curses
             if self.graphics_active:
@@ -283,16 +282,17 @@ class Worm:
     }
 
 
-    def __init__(self, pg, length, row=None, col=None, rstep=None, cstep=None):
-        self.pg = pg            # Current playground
+    def __init__(self, playground, length, \
+        row=None, col=None, rstep=None, cstep=None):
+        self.pg = playground    # Current playground
         self.length = length    # Expected length
         self.curlen = 1         # Current length including head
         # Set initial moving direction
-        self.rowstep = rstep if rstep != None else self.STEP_IDLE
-        self.colstep = cstep if cstep != None else self.STEP_IDLE
+        self.rowstep = rstep if rstep is not None else self.STEP_IDLE
+        self.colstep = cstep if cstep is not None else self.STEP_IDLE
         # Set initial head position
-        self.poss = [[row if row != None else pg.rows / 2, \
-                      col if col != None else pg.cols / 2]]
+        self.poss = [[row if row is not None else pg.rows / 2, \
+                      col if col is not None else pg.cols / 2]]
         self.score = 0              # Score counter
         self.fail = self.FAIL_NONE  # Reason for Game Over
 
@@ -314,8 +314,8 @@ class Worm:
     def step(self):
         """ Move the Snake in current direction """
         if self.STEP_IDLE == self.rowstep and self.STEP_IDLE == self.colstep:
-            return 0
-        oldhead = self.poss[0]
+            # Snake is sleeping
+            return self.FAIL_NONE
         newhead = [self.poss[0][0] + self.rowstep, \
                    self.poss[0][1] + self.colstep]
         cell = self.pg.atpos(newhead[0], newhead[1])
@@ -351,8 +351,8 @@ class Worm:
 
     def turn(self, rstep=None, cstep=None):
         """ Change current direction """
-        self.rowstep = rstep if rstep != None else self.STEP_IDLE
-        self.colstep = cstep if cstep != None else self.STEP_IDLE
+        self.rowstep = rstep if rstep is not None else self.STEP_IDLE
+        self.colstep = cstep if cstep is not None else self.STEP_IDLE
 
 
     def getscore(self):
@@ -360,21 +360,21 @@ class Worm:
         return self.score
 
 
-    def getfailtext(self, fail = -1) -> str:
-       """ Convert fail code (FAIL_-mnemonic) to text.
-       Without parameter, the object's failure text is returned.
-       With parameter, requested code is converted to text.
-       """
-       if -1 == fail:
-           return self.FAILTEXT[self.fail]
-       try:
-           return self.FAILTEXT[fail]
-       except KeyError:
-           errprint("Program error - illegal index (" + str(fail) + ")")
-           # for line in traceback.format_stack():
-           line = traceback.format_stack()[0]
-           errprint(line.strip())
-           sys.exit(EXIT_PROG)
+    def getfailtext(self, fail=-1) -> str:
+        """ Convert fail code (FAIL_-mnemonic) to text.
+        Without parameter, the object's failure text is returned.
+        With parameter, requested code is converted to text.
+        """
+        if -1 == fail:
+            return self.FAILTEXT[self.fail]
+        try:
+            return self.FAILTEXT[fail]
+        except KeyError:
+            errprint("Program error - illegal index (" + str(fail) + ")")
+            # for line in traceback.format_stack():
+            line = traceback.format_stack()[0]
+            errprint(line.strip())
+            sys.exit(EXIT_PROG)
 
 
     def play(self):
@@ -444,7 +444,7 @@ def readconf():
     for line in cnf:
         if not kv.match(line):
             continue
-        keypos = re.search("\s", line).start()
+        keypos = re.search(r"\s", line).start()
         key = line[:keypos - 1]
         val = line[keypos:].strip()
         if CNFKEY_ROWS[1] == key:

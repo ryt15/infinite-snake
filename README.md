@@ -17,11 +17,11 @@ After some playing, you'll soon get bored and it's time to take real action!
 - If you found any bugs, try to fix them.
 - Update the program to the latest version of the programming language.
 - Make the source code more compact.
-- Add a log feature. Perhaps make it possible to replay a logged session from the log file.
+- Improve logging. Perhaps add a switch allowing the user to set the log level.
 - Extend the configuration file and/or arguments.
 - Add colors and/or fancier graphical symbols.
 - Add sound.
-- Separate all texts from the source code, making it possible to select language.
+- Separate all texts from the source code. Make it possible to select language with a command-line switch.
 - Split the program into a client and a server which communicate via tcp/ip or udp/ip.
 - Add more snakes on the playground, reading steering input from the net or named pipes etc.
 - Add more playgrounds on the display.
@@ -33,16 +33,22 @@ After some playing, you'll soon get bored and it's time to take real action!
 - Try some AI - Train a neural network to steer a snake.
 - Add autometed tests.
 - Implement Docker.
-- Make the game public. Allow users to play and charge them some Satoshis each time.
+- Make the game public. Allow users to play and charge them some Satoshis via Lightning Network each time.
+
+### Hints
+
+- Since the program enters graphics mode, errors won't be visible. But since they are written to stderr you can redirect them into a separate file. How?
+- Analyze the source code with pylint and make that a habit. Start by fixing some of the existing complaints.
 
 
 ## Synopsis
 
 ```
-./snake.py [-h] [-C cfile] [r rows] [-c cols] [-t to]
+./snake.py [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
            -h: Show this help and exit
            -C: Read configuration from cfile
            -c: Set playground height (including borders)
            -r: Set playground width (including borders)
            -t: Set time in ms between snake steps
+           -L: Log to file lf
 ```

@@ -35,6 +35,9 @@ import curses
 import atexit
 import re
 import traceback
+import logging
+import os
+from datetime import datetime
 # import pdb
 
 # Exit codes
@@ -171,8 +174,13 @@ class Playground:
             if self.OBJ_EMPTY == cell & \
                 (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE):
                 break
+        logging.debug('feed %s %s, %s, %s', \
+            datetime.now().strftime('%H:%M:%S %f'), \
+            str(foodpos[0]), str(foodpos[1]), str(cell))
         self.markpos(foodpos[0], foodpos[1], self.OBJ_FOOD)
         self.win.addch(foodpos[0], foodpos[1], self.VIS_FOOD)
+        self.win.addstr(0, 2, "  Food: " + str(int(foodpos[0])) + \
+            " " + str(int(foodpos[1])) + "  ")
         self.win.refresh()
 
 
@@ -220,6 +228,9 @@ class Playground:
         self.pg[int(row)][int(col)] |= what
         if self.OBJ_EMPTY == what:
             self.pg[int(row)][int(col)] = self.OBJ_EMPTY
+        logging.debug('mark %s %s, %s, %s', \
+            datetime.now().strftime('%H:%M:%S %f'), \
+	    str(int(row)), str(int(col)), str(what))
         return was
 
 
@@ -230,6 +241,9 @@ class Playground:
         """
         was = self.atpos(int(row), int(col))
         self.pg[int(row)][int(col)] &= ~what
+        logging.debug('umrk %s %s, %s, %s', \
+            datetime.now().strftime('%H:%M:%S %f'), \
+	    str(int(row)), str(int(col)), str(what))
         return was
 
 
@@ -308,11 +322,14 @@ class Worm:
 
     def step(self):
         """ Move the Snake in current direction """
+        needfood = False
         if self.STEP_IDLE == self.rowstep and self.STEP_IDLE == self.colstep:
             # Snake is sleeping
             return self.FAIL_NONE
+        # Calculate next position for snake's head
         newhead = [self.poss[0][0] + self.rowstep, \
                    self.poss[0][1] + self.colstep]
+        # Find out what's at the new position
         cell = self.pg.atpos(newhead[0], newhead[1])
         if cell:
             self.pg.win.refresh()
@@ -321,10 +338,15 @@ class Worm:
         if cell & pg.OBJ_BOMB:
             return self.FAIL_HITBOMB
         if cell & pg.OBJ_FOOD:
-            pg.unmarkpos(self.poss[0][0], self.poss[0][1], pg.OBJ_FOOD)
-            pg.feed()
+            logging.debug('step %s %s, %s', \
+                datetime.now().strftime('%H:%M:%S %f'), \
+                str(int(newhead[0])), str(int(newhead[1])))
+            pg.unmarkpos(newhead[0], newhead[1], pg.OBJ_FOOD)
+            needfood = True
             self.inclen()
-        pg.markpos(self.poss[0][0], self.poss[0][1], pg.OBJ_SNAKE)
+        pg.markpos(newhead[0], newhead[1], pg.OBJ_SNAKE)
+        if needfood:
+            pg.feed()
         self.poss.insert(0, newhead)
         if len(self.poss) > self.length:
             l = len(self.poss) - 1
@@ -390,20 +412,22 @@ class Worm:
                 self.draw()
 
         # Show the score
-        res_row = int(self.cnf.getconf(CNFKEY_ROWS[1])) - 1
-        pg.win.addstr(res_row, 1, " Score: " + str(self.score) + " ")
+        score_row = int(self.cnf.getconf(CNFKEY_ROWS[1])) - 1
+        pg.win.addstr(score_row, 2, " Score: " + str(self.score) + " ")
         self.draw()
         return self.fail
 
 
 class Help:
     """ Show help """
-    usage_message = '''Usage: snake [-h] [-C cfile] [r rows] [-c cols] [-t to]
+    usage_message = \
+    '''Usage: snake [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
        -h: Show this help and exit
        -C: Read configuration from cfile
        -c: Set playground height (including borders)
        -r: Set playground width (including borders)
        -t: Set time in ms between snake steps
+       -L: Log to file lf
     '''
     @classmethod
     def usage(cls):
@@ -483,10 +507,15 @@ class Config:
         sys.exit(EXIT_PROG)
 
 
-# Command line options and switches
-
 conf = Config()
 gotconf = False
+
+
+
+
+# Command line options and switches
+
+logfile = None  # Name of log file (if set with -L option)
 
 try:
     for arg in range(1, len(sys.argv)):
@@ -494,6 +523,19 @@ try:
             # Show help and exit
             Help.usage()
             sys.exit(EXIT_OK)
+        if '-L' == sys.argv[arg]:
+            arg += 1
+            logfile = sys.argv[arg]
+            if os.path.exists(logfile):
+                mystat = os.stat(sys.argv[0])
+                lfstat = os.stat(logfile)
+                if mystat.st_dev == lfstat.st_dev and \
+                    mystat.st_ino == lfstat.st_ino:
+                    errprint("ERROR: Log file (-L) same as program file!")
+                    sys.exit(EXIT_ARGS)
+            logging.basicConfig(filename=logfile, level=logging.INFO)
+            now = datetime.now()
+            logging.info('Started %s', now.strftime('%H:%M:%S %f'))
         if '-C' == sys.argv[arg]:
             # Read configuration from file
             if gotconf:
@@ -571,10 +613,15 @@ worm.draw()
 worm.play()
 
 pg.keypause()
+pg.display.graphact()
 
 # Display score
-pg.display.graphact()
 print("Score:   " + str(worm.getscore()))
 print("Failure: " + worm.getfailtext())
+
+# Log result
+now = datetime.now()
+logging.info('Ended %s. Score %s. Fail %s.', \
+    now.strftime('%H:%M:%S %f'), str(worm.getscore()), worm.getfailtext())
 
 sys.exit(EXIT_OK)

@@ -3,26 +3,7 @@
 For synopsis, see function usage(), or execute with the -h switch.
 
 The main purpose of this program is not to play it, but to learn Python.
-Start by studying it, then try to improve it. Some suggestions:
-    0. Fix a bug
-    1. Make the code more compact
-    2. Implement new features from Python 3.10 or later
-    3. Add a log file, allowing replay of earlier logged session
-    4. Add colors and grapcial symbols
-    5. Move all texts to separate text files (try Chinese, 中文!)
-    6. Add more snakes
-    7. Split the program into a client and a server (TCP or UDP)
-    8. Add sound
-    9. Create an API and read configuration from it
-   10. Show several playgrounds on the same screen
-   11. Add a dimension so the snake can also move in depth
-   12. Rewrite the program into PHP, Kotlin, JavaScript, Go, C or C++
-   13. Convert the program to a mobile app
-   14. Make it possible for snakes to move between playgrounds
-   15. Train a neural network (AI) to play the game
-   16. Implement automated tests
-   17. Implement revision control via Git
-   18. Implement Docker
+Start by studying it, then try to improve it. See README.md.
 
 By Rein Ytterberg 2020.
 For Python version 3.8

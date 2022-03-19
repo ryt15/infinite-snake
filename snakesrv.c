@@ -122,10 +122,10 @@ static int session(int clisock, struct sockaddr_in client, socklen_t addrlen)
     while (!done) {
         FD_ZERO(&rfds);
         FD_SET(clisock, &rfds);
-        tv.tv_sec = 10;
-        tv.tv_usec = 0;
+        // tv.tv_sec = 10;
+        // tv.tv_usec = 0;
 
-        retval = select(clisock + 1, &rfds, NULL, NULL, &tv);
+        retval = select(clisock + 1, &rfds, NULL, NULL, NULL);
 
         if (retval) {
             sprintf(message,

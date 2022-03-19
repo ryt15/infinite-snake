@@ -18,8 +18,12 @@ import re
 import traceback
 import logging
 import os
+import socket
 from datetime import datetime
 # import pdb
+
+# Version (as presented to server)
+CLIVER = "0.1"
 
 # Exit codes
 EXIT_OK = 0     # All is well
@@ -27,12 +31,15 @@ EXIT_SYNTAX = 1 # Invalid command-line syntax
 EXIT_ARGS = 2   # Invalid arguments
 EXIT_SIGNAL = 3 # Termination signal received
 EXIT_PROG = 4   # Program error - debugging required!
+EXIT_ERR = 5    # Execution error
 
 # Configuration CLI switches, config file keys and defaults
 CNFKEY_ROWS = ['r', 'rows', 10]      # Playground size - rows
 CNFKEY_COLS = ['c', 'cols', 20]      # Playground size - columns
 CNFKEY_SLEN = ['l', 'snakelen', 3]   # Initial snake length
 CNFKEY_TIMO = ['t', 'timeout', 300]  # Time in ms between snake moves
+CNFKEY_PORT = ['P', 'port', 0]       # Server port
+CNFKEY_HOST = ['H', 'host', '']      # Server host
 
 
 
@@ -358,6 +365,11 @@ class Worm:
         return self.score
 
 
+    def getfailcode(self):
+        """ Return numerical reason for failed game """
+        return self.fail
+
+
     def getfailtext(self, fail=-1) -> str:
         """ Convert fail code (FAIL_-mnemonic) to text.
         Without parameter, the object's failure text is returned.
@@ -403,12 +415,14 @@ class Help:
     """ Show help """
     usage_message = \
     '''Usage: snake [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
+                    [-P port -H host]
        -h: Show this help and exit
        -C: Read configuration from cfile
        -c: Set playground height (including borders)
        -r: Set playground width (including borders)
        -t: Set time in ms between snake steps
        -L: Log to file lf
+       -P, -H Connect to server host at given port
     '''
     @classmethod
     def usage(cls):
@@ -427,6 +441,8 @@ class Config:
         self.cnfval_cols = CNFKEY_COLS[2]
         self.cnfval_slen = CNFKEY_SLEN[2]
         self.cnfval_timo = CNFKEY_TIMO[2]
+        self.cnfval_port = CNFKEY_PORT[2]
+        self.cnfval_host = CNFKEY_HOST[2]
         if conffile is not None:
             self.readconf(conffile)
 
@@ -471,6 +487,12 @@ class Config:
         if CNFKEY_TIMO[1] == key:
             self.cnfval_timo = int(val)
             return
+        if CNFKEY_PORT[1] == key:
+            self.cnfval_port = int(val)
+            return
+        if CNFKEY_HOST[1] == key:
+            self.cnfval_host = val
+            return
         errprint("Invalid setconf(key=" + key + ")!")
         sys.exit(EXIT_PROG)
 
@@ -484,8 +506,90 @@ class Config:
             return self.cnfval_slen
         if CNFKEY_TIMO[1] == key:
             return self.cnfval_timo
+        if CNFKEY_PORT[1] == key:
+            return self.cnfval_port
+        if CNFKEY_HOST[1] == key:
+            return self.cnfval_host
         errprint("Invalid getconf(key=" + key + ")!")
         sys.exit(EXIT_PROG)
+
+
+class Server:
+    """ Handle connection to Snake server (snakesrv).
+    If both a server host name or IP address and a port to it is
+    assigned, the program shall connect to it. If none or only one
+    of the values is set, server connection will be silently ignored.
+    Connection uses TCP/IP sockets.
+    The server must be running.
+    """
+
+    def __init__(self, cnf=None):
+        self.use = False
+        self.cnf = cnf;
+        if None == cnf:
+            return
+        host = cnf.getconf(CNFKEY_HOST[1])
+        port = cnf.getconf(CNFKEY_PORT[1])
+        if port is None or 0 == port:
+            return
+        if host is None or '' == host:
+            return
+        self.use = True
+        self.host = host
+        self.port = port
+        try:
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((self.host, self.port))
+            # self.send(b"Spenatgnebb")
+            # ret = self.sock.recv(1024)
+            # print(f"Socket ret: {ret!r}")
+        except ConnectionRefusedError:
+            self.use = False
+            errprint("Server " + host + " refuses connection on port " + \
+                str(port) + ".")
+            self.sock.close()
+            sys.exit(EXIT_ERR)
+
+    def send(self, data):
+        if self.use is False:
+            return
+        # print("send: self.sock ", self.sock);
+        self.sock.sendall(data)
+
+    def recv(self, len=1024) -> str:
+        if self.use is False:
+            return None
+        ret = self.sock.recv(len).decode()
+        return ret
+
+    def newgame(self):
+        head = ('G>BEG,VER:' + CLIVER).encode()
+        self.send(head)
+        ret = self.recv(1024)
+        head = ('G>R:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + ',C:' + \
+            str(self.cnf.getconf(CNFKEY_COLS[1]))).encode()
+        self.send(head)
+        ret = self.recv(1024)
+        head = ('G>S:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + ',T:' + \
+            str(self.cnf.getconf(CNFKEY_TIMO[1]))).encode()
+        self.send(head)
+        ret = self.recv(1024)
+
+    def endgame(self, score, failcode, sig=-1):
+        head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
+            str(failcode);
+        self.send(head.encode())
+        ret = self.sock.recv(1024)
+
+    def stop(self):
+        if self.use is True:
+            self.sock.close()
+
+    def trap(self, sig):
+        if self.use is True:
+            self.endgame(-1, -1, sig);
+            self.sock.close()
+
 
 
 conf = Config()
@@ -505,6 +609,7 @@ try:
             Help.usage()
             sys.exit(EXIT_OK)
         if '-L' == sys.argv[arg]:
+            # Set log file
             arg += 1
             logfile = sys.argv[arg]
             if os.path.exists(logfile):
@@ -541,6 +646,14 @@ try:
             # Timeout in ms between movements
             arg += 1
             conf.setconf(CNFKEY_TIMO[1], sys.argv[arg])
+        if '-' + CNFKEY_PORT[0] == sys.argv[arg]:
+            # Server port
+            arg += 1
+            conf.setconf(CNFKEY_PORT[1], sys.argv[arg])
+        if '-' + CNFKEY_HOST[0] == sys.argv[arg]:
+            # Server host
+            arg += 1
+            conf.setconf(CNFKEY_HOST[1], sys.argv[arg])
 except IndexError:
     errprint("Invalid arguments!")
     Help.usage()
@@ -551,14 +664,20 @@ except ValueError:
     sys.exit(EXIT_SYNTAX)
 
 
+# Connect to server (if requested)
+server = Server(conf)
+server.newgame()
+
+
 # Initialize display and playground
 pg = Playground(conf)
 
 
-# Cleanup
+# Cleanup handler
 
 def exithand():
     """ Cleanup environment before exiting """
+    server.stop()
     pg.display.graphact()
 
 atexit.register(exithand)
@@ -570,6 +689,7 @@ def sighand(signum, frame):
     """ Signal handler callback """
     pg.display.graphact()
     errprint("Interrupted")
+    server.trap(signum)
     sys.exit(EXIT_SIGNAL)
 
 signal.signal(signal.SIGINT, sighand)
@@ -592,6 +712,9 @@ worm.draw()
 
 # Start playing
 worm.play()
+
+# Report to server (if any)
+server.endgame(worm.getscore(), worm.getfailcode())
 
 pg.keypause()
 pg.display.graphact()

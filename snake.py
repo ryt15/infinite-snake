@@ -58,6 +58,10 @@ class Display:
         self.timo = timo
         self.win = self.graphact(rows, cols, timo)
 
+    def getwin(self):
+        """ Return window handler """
+        return self.win
+
     def graphact(self, rows=0, cols=0, timo=0):
         """ Switch terminal into graphics mode, or resume from it.
         This function is assumed to be called once at startup to
@@ -137,20 +141,20 @@ class Playground:
         self.rows = cnf.getconf(CNFKEY_ROWS[1])
         self.cols = cnf.getconf(CNFKEY_COLS[1])
         self.timo = cnf.getconf(CNFKEY_TIMO[1])
-        self.pg = [[self.OBJ_EMPTY for cc in range(self.cols)] \
+        self.pgr = [[self.OBJ_EMPTY for cc in range(self.cols)] \
             for rr in range(self.rows)]
         self.display = Display(self.rows, self.cols, self.timo)
-        self.win = self.display.win
+        self.win = self.display.getwin()
         self.postoclean = [] # Positions needed to be cleaned
         # Mark borders
         # horizontal borders
-        for cc in range(self.cols):
-            self.pg[0][cc] = self.OBJ_BORDER
-            self.pg[self.rows - 1][cc] = self.OBJ_BORDER
+        for col in range(self.cols):
+            self.pgr[0][col] = self.OBJ_BORDER
+            self.pgr[self.rows - 1][col] = self.OBJ_BORDER
         # vertical borders
-        for rr in range(self.rows):
-            self.pg[rr][0] = self.OBJ_BORDER
-            self.pg[rr][self.cols - 1] = self.OBJ_BORDER
+        for row in range(self.rows):
+            self.pgr[row][0] = self.OBJ_BORDER
+            self.pgr[row][self.cols - 1] = self.OBJ_BORDER
 
 
     def feed(self):
@@ -194,16 +198,16 @@ class Playground:
     def cleanpos(self, need_refresh=False):
         """ Visibly cleans up the Playground """
         # Blank positions that were marked by call to setcleanpos()
-        for pp in range(0, len(self.postoclean)):
-            self.win.addch(int(self.postoclean[pp][0]), \
-                int(self.postoclean[pp][1]), self.VIS_CLEANER)
+        for pos in range(0, len(self.postoclean)):
+            self.win.addch(int(self.postoclean[pos][0]), \
+                int(self.postoclean[pos][1]), self.VIS_CLEANER)
         if need_refresh:
             self.win.refresh()
 
 
     def atpos(self, row, col):
         """ Returns what is at the given position, an OBJ_-mnemonic. """
-        return self.pg[int(row)][int(col)]
+        return self.pgr[int(row)][int(col)]
 
 
     def markpos(self, row, col, what=OBJ_EMPTY) -> int:
@@ -213,9 +217,9 @@ class Playground:
             Returns previous value.
         """
         was = self.atpos(int(row), int(col))
-        self.pg[int(row)][int(col)] |= what
+        self.pgr[int(row)][int(col)] |= what
         if self.OBJ_EMPTY == what:
-            self.pg[int(row)][int(col)] = self.OBJ_EMPTY
+            self.pgr[int(row)][int(col)] = self.OBJ_EMPTY
         logging.debug('mark %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
 	    str(int(row)), str(int(col)), str(what))
@@ -228,7 +232,7 @@ class Playground:
             Returns previous value.
         """
         was = self.atpos(int(row), int(col))
-        self.pg[int(row)][int(col)] &= ~what
+        self.pgr[int(row)][int(col)] &= ~what
         logging.debug('umrk %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
 	    str(int(row)), str(int(col)), str(what))
@@ -280,7 +284,7 @@ class Worm:
 
     def __init__(self, playground, cnf, \
         row=None, col=None, rstep=None, cstep=None):
-        self.pg = playground    # Current playground
+        self.pgr = playground    # Current playground
         self.cnf = cnf          # Configuration
         self.length = cnf.getconf(CNFKEY_SLEN[1])    # Expected length
         self.curlen = 1         # Current length including head
@@ -288,8 +292,8 @@ class Worm:
         self.rowstep = rstep if rstep is not None else self.STEP_IDLE
         self.colstep = cstep if cstep is not None else self.STEP_IDLE
         # Set initial head position
-        self.poss = [[row if row is not None else pg.rows / 2, \
-                      col if col is not None else pg.cols / 2]]
+        self.poss = [[row if row is not None else self.pgr.rows / 2, \
+                      col if col is not None else self.pgr.cols / 2]]
         self.score = 0              # Score counter
         self.fail = self.FAIL_NONE  # Reason for Game Over
 
@@ -300,12 +304,13 @@ class Worm:
 
     def draw(self):
         """ Draw the Snake visually """
-        self.pg.cleanpos(False)
-        self.pg.win.addch(int(self.poss[0][0]), int(self.poss[0][1]), self.HEAD)
+        self.pgr.cleanpos(False)
+        self.pgr.win.addch(int(self.poss[0][0]), int(self.poss[0][1]), \
+            self.HEAD)
         for tail in range(1, len(self.poss)):
-            self.pg.win.addch(int(self.poss[tail][0]), \
+            self.pgr.win.addch(int(self.poss[tail][0]), \
                               int(self.poss[tail][1]), self.BODY)
-        self.pg.win.refresh()
+        self.pgr.win.refresh()
 
 
     def step(self):
@@ -318,38 +323,39 @@ class Worm:
         newhead = [self.poss[0][0] + self.rowstep, \
                    self.poss[0][1] + self.colstep]
         # Find out what's at the new position
-        cell = self.pg.atpos(newhead[0], newhead[1])
+        cell = self.pgr.atpos(newhead[0], newhead[1])
         if cell:
-            self.pg.win.refresh()
-        if cell & pg.OBJ_SNAKE:
+            self.pgr.win.refresh()
+        if cell & self.pgr.OBJ_SNAKE:
             return self.FAIL_HITSNAKE
-        if cell & pg.OBJ_BOMB:
+        if cell & self.pgr.OBJ_BOMB:
             return self.FAIL_HITBOMB
-        if cell & pg.OBJ_FOOD:
+        if cell & self.pgr.OBJ_FOOD:
             logging.debug('step %s %s, %s', \
                 datetime.now().strftime('%H:%M:%S %f'), \
                 str(int(newhead[0])), str(int(newhead[1])))
-            pg.unmarkpos(newhead[0], newhead[1], pg.OBJ_FOOD)
+            self.pgr.unmarkpos(newhead[0], newhead[1], self.pgr.OBJ_FOOD)
             needfood = True
             self.inclen()
-        pg.markpos(newhead[0], newhead[1], pg.OBJ_SNAKE)
+        self.pgr.markpos(newhead[0], newhead[1], self.pgr.OBJ_SNAKE)
         if needfood:
-            pg.feed()
+            self.pgr.feed()
         self.poss.insert(0, newhead)
         if len(self.poss) > self.length:
-            l = len(self.poss) - 1
-            pg.setcleanpos(self.poss[l])
-            pg.unmarkpos(self.poss[l][0], self.poss[l][1], pg.OBJ_SNAKE)
-            self.poss.pop(l)
+            last = len(self.poss) - 1
+            self.pgr.setcleanpos(self.poss[last])
+            self.pgr.unmarkpos(self.poss[last][0], self.poss[last][1], \
+                self.pgr.OBJ_SNAKE)
+            self.poss.pop(last)
         # Check that snake is still inside the playground.
-        # Actually we can also check if (cell & pg.BORDER)
+        # Actually we can also check if (cell & self.pgr.BORDER)
         if self.poss[0][0] < 1: # Hit top
             return self.FAIL_HITHIGH
         if self.poss[0][1] < 1: # Hit left
             return self.FAIL_HITLEFT
-        if self.poss[0][0] >= pg.rows - 1: # Hit bottom
+        if self.poss[0][0] >= self.pgr.rows - 1: # Hit bottom
             return self.FAIL_HITLOW
-        if self.poss[0][1] >= pg.cols - 1: # Hit right
+        if self.poss[0][1] >= self.pgr.cols - 1: # Hit right
             return self.FAIL_HITRIGHT
         return self.FAIL_NONE
 
@@ -390,7 +396,7 @@ class Worm:
     def play(self):
         """ Main loop. Returns failure as FAIL_-mnemonic """
         while self.FAIL_NONE == self.fail:
-            key = self.pg.win.getch()
+            key = self.pgr.win.getch()
             if curses.KEY_DOWN == key:
                 self.turn(self.STEP_DOWN)
             if curses.KEY_LEFT == key:
@@ -406,7 +412,7 @@ class Worm:
 
         # Show the score
         score_row = int(self.cnf.getconf(CNFKEY_ROWS[1])) - 1
-        pg.win.addstr(score_row, 2, " Score: " + str(self.score) + " ")
+        self.pgr.win.addstr(score_row, 2, " Score: " + str(self.score) + " ")
         self.draw()
         return self.fail
 
@@ -451,9 +457,9 @@ class Config:
         self.conffile = conffile if conffile is not None else "snake.cnf"
 
         try:
-            fp = open(self.conffile)
-            cnf = fp.readlines()
-            fp.close()
+            conff = open(self.conffile)
+            cnf = conff.readlines()
+            conff.close()
         except FileNotFoundError:
             errprint("Non-existing configuration file: " + self.conffile)
             sys.exit(EXIT_ARGS)
@@ -464,9 +470,9 @@ class Config:
             errprint("Configuration file is a directory: " + self.conffile)
             sys.exit(EXIT_ARGS)
 
-        kv = re.compile('^[a-z]+: [a-zA-Z0-9]+')
+        keyval = re.compile('^[a-z]+: [a-zA-Z0-9]+')
         for line in cnf:
-            if not kv.match(line):
+            if not keyval.match(line):
                 continue
             keypos = re.search(r"\s", line).start()
             key = line[:keypos - 1]
@@ -524,9 +530,9 @@ class Server:
     """
 
     def __init__(self, cnf=None):
-        self.use = False
-        self.cnf = cnf;
-        if None == cnf:
+        self.use = False    # True if we're connected to a server
+        self.cnf = cnf
+        if cnf is None:
             return
         host = cnf.getconf(CNFKEY_HOST[1])
         port = cnf.getconf(CNFKEY_PORT[1])
@@ -551,56 +557,62 @@ class Server:
             sys.exit(EXIT_ERR)
 
     def send(self, data):
+        """ Sends a sequence to the server if connected """
         if self.use is False:
             return
         # print("send: self.sock ", self.sock);
         self.sock.sendall(data)
 
-    def recv(self, len=1024) -> str:
+    def recv(self, maxlen=1024) -> str:
+        """ Receives a string from server if connected """
         if self.use is False:
             return None
-        ret = self.sock.recv(len).decode()
+        ret = self.sock.recv(maxlen).decode()
         return ret
 
     def newgame(self):
+        """ Reports start of a new game to the server, if connected """
         head = ('G>BEG,VER:' + CLIVER).encode()
         self.send(head)
-        ret = self.recv(1024)
+        self.recv(1024)
         head = ('G>R:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + ',C:' + \
             str(self.cnf.getconf(CNFKEY_COLS[1]))).encode()
         self.send(head)
-        ret = self.recv(1024)
+        self.recv(1024)
         head = ('G>S:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + ',T:' + \
             str(self.cnf.getconf(CNFKEY_TIMO[1]))).encode()
         self.send(head)
-        ret = self.recv(1024)
+        self.recv(1024)
 
     def endgame(self, score, failcode, sig=-1):
+        """ Reports status about ended game to the server, if connected """
         head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
-            str(failcode);
+            str(failcode)
         self.send(head.encode())
-        ret = self.sock.recv(1024)
+        self.recv(1024)
 
     def stop(self):
+        """ Closes connection to server, if connected """
         if self.use is True:
             self.sock.close()
 
     def trap(self, sig):
+        """ Terminates server connection on signal reception """
         if self.use is True:
-            self.endgame(-1, -1, sig);
+            self.endgame(-1, -1, sig)
             self.sock.close()
 
 
 
-conf = Config()
-gotconf = False
+CONF = Config()
+GOTCONF = False
 
 
 
 
 # Command line options and switches
 
-logfile = None  # Name of log file (if set with -L option)
+LOGFILE = None  # Name of log file (if set with -L option)
 
 try:
     for arg in range(1, len(sys.argv)):
@@ -611,49 +623,49 @@ try:
         if '-L' == sys.argv[arg]:
             # Set log file
             arg += 1
-            logfile = sys.argv[arg]
-            if os.path.exists(logfile):
+            LOGFILE = sys.argv[arg]
+            if os.path.exists(LOGFILE):
                 mystat = os.stat(sys.argv[0])
-                lfstat = os.stat(logfile)
+                lfstat = os.stat(LOGFILE)
                 if mystat.st_dev == lfstat.st_dev and \
                     mystat.st_ino == lfstat.st_ino:
                     errprint("ERROR: Log file (-L) same as program file!")
                     sys.exit(EXIT_ARGS)
-            logging.basicConfig(filename=logfile, level=logging.INFO)
+            logging.basicConfig(filename=LOGFILE, level=logging.INFO)
             now = datetime.now()
             logging.info('Started %s', now.strftime('%H:%M:%S %f'))
         if '-C' == sys.argv[arg]:
             # Read configuration from file
-            if gotconf:
+            if GOTCONF:
                 errprint("-C can only be used once!")
                 sys.exit(EXIT_SYNTAX)
             arg += 1
-            conf.readconf(sys.argv[arg])
-            gotconf = True
+            CONF.readconf(sys.argv[arg])
+            GOTCONF = True
         if '-' + CNFKEY_ROWS[0] == sys.argv[arg]:
             # Set number of rows on playground
             arg += 1
-            conf.setconf(CNFKEY_ROWS[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_ROWS[1], sys.argv[arg])
         if '-' + CNFKEY_COLS[0] == sys.argv[arg]:
             # Set number of columns on playground
             arg += 1
-            conf.setconf(CNFKEY_COLS[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_COLS[1], sys.argv[arg])
         if '-' + CNFKEY_SLEN[0] == sys.argv[arg]:
             # Set initial snake length
             arg += 1
-            conf.setconf(CNFKEY_SLEN[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_SLEN[1], sys.argv[arg])
         if '-' + CNFKEY_TIMO[0] == sys.argv[arg]:
             # Timeout in ms between movements
             arg += 1
-            conf.setconf(CNFKEY_TIMO[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_TIMO[1], sys.argv[arg])
         if '-' + CNFKEY_PORT[0] == sys.argv[arg]:
             # Server port
             arg += 1
-            conf.setconf(CNFKEY_PORT[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_PORT[1], sys.argv[arg])
         if '-' + CNFKEY_HOST[0] == sys.argv[arg]:
             # Server host
             arg += 1
-            conf.setconf(CNFKEY_HOST[1], sys.argv[arg])
+            CONF.setconf(CNFKEY_HOST[1], sys.argv[arg])
 except IndexError:
     errprint("Invalid arguments!")
     Help.usage()
@@ -665,20 +677,20 @@ except ValueError:
 
 
 # Connect to server (if requested)
-server = Server(conf)
-server.newgame()
+SERVER = Server(CONF)
+SERVER.newgame()
 
 
 # Initialize display and playground
-pg = Playground(conf)
+PGR = Playground(CONF)
 
 
 # Cleanup handler
 
 def exithand():
     """ Cleanup environment before exiting """
-    server.stop()
-    pg.display.graphact()
+    SERVER.stop()
+    PGR.display.graphact()
 
 atexit.register(exithand)
 
@@ -687,9 +699,10 @@ atexit.register(exithand)
 
 def sighand(signum, frame):
     """ Signal handler callback """
-    pg.display.graphact()
+    del frame
+    PGR.display.graphact()
     errprint("Interrupted")
-    server.trap(signum)
+    SERVER.trap(signum)
     sys.exit(EXIT_SIGNAL)
 
 signal.signal(signal.SIGINT, sighand)
@@ -698,34 +711,34 @@ signal.signal(signal.SIGQUIT, sighand)
 signal.signal(signal.SIGTERM, sighand)
 
 
-pg.feed()   # First piece of food
-pg.bomb()   # First bomb
-pg.draw()   # Draw complete playground
+PGR.feed()   # First piece of food
+PGR.bomb()   # First bomb
+PGR.draw()   # Draw complete playground
 
 
 # Create one snake
-worm = Worm(pg, conf)
+WORM = Worm(PGR, CONF)
 # Determine initial moving direction
-worm.turn(worm.STEP_UP, worm.STEP_IDLE)
+WORM.turn(WORM.STEP_UP, WORM.STEP_IDLE)
 # Draw the snake initially
-worm.draw()
+WORM.draw()
 
 # Start playing
-worm.play()
+WORM.play()
 
 # Report to server (if any)
-server.endgame(worm.getscore(), worm.getfailcode())
+SERVER.endgame(WORM.getscore(), WORM.getfailcode())
 
-pg.keypause()
-pg.display.graphact()
+PGR.keypause()
+PGR.display.graphact()
 
 # Display score
-print("Score:   " + str(worm.getscore()))
-print("Failure: " + worm.getfailtext())
+print("Score:   " + str(WORM.getscore()))
+print("Failure: " + WORM.getfailtext())
 
 # Log result
-now = datetime.now()
+NOW = datetime.now()
 logging.info('Ended %s. Score %s. Fail %s.', \
-    now.strftime('%H:%M:%S %f'), str(worm.getscore()), worm.getfailtext())
+    NOW.strftime('%H:%M:%S %f'), str(WORM.getscore()), WORM.getfailtext())
 
 sys.exit(EXIT_OK)

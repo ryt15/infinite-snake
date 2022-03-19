@@ -15,6 +15,9 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 
+/* Debugging and verbosity */
+// #define VERBOSE
+
 /* Default values */
 #define DEF_PORT    8888    /* Default port */
 
@@ -102,7 +105,7 @@ static int socker(int action, ...) {
 static int session(int clisock, struct sockaddr_in client, socklen_t addrlen)
 {
     int     retval;
-    struct timeval tv;
+    // struct timeval tv;
     char    message[1024];
     fd_set  rfds;
     int     done = 0;
@@ -117,8 +120,6 @@ static int session(int clisock, struct sockaddr_in client, socklen_t addrlen)
         return EXIT_ERR;
     }
 
-    printf("Waiting for input.\n");
-
     while (!done) {
         FD_ZERO(&rfds);
         FD_SET(clisock, &rfds);
@@ -128,26 +129,28 @@ static int session(int clisock, struct sockaddr_in client, socklen_t addrlen)
         retval = select(clisock + 1, &rfds, NULL, NULL, NULL);
 
         if (retval) {
-            sprintf(message,
-                "HTTP/1.1 200 OK\n\n<html><head><title>Test</title>"
-                "<body><p>Hello, World!</p></body></html>\n");
+            sprintf(message, "200 OK\n");
             write(clisock, message, strlen(message));
         } else if (-1 == retval) {
             close(clisock);
-            printf("select() error.\n");
+            fprintf(stderr, "select() error: %s\n", strerror(errno));
             return EXIT_ERR;
         } else {
+#ifdef VERBOSE
             printf("Timeout!\n");
+#endif
             done = 1;
             continue;
         }
 
         if ((reads = read(clisock, message, 1024)) > 0) {
             message[reads] = '\0';
+#ifdef VERBOSE
             printf("Read: %s\n", message);
+#endif
         }
         if (reads < 0) {
-            printf("errno %d: %s\n", errno, strerror(errno));
+            fprintf(stderr, "read() errno %d: %s\n", errno, strerror(errno));
             close(clisock);
             return EXIT_ERR;
         }
@@ -166,7 +169,7 @@ static int session(int clisock, struct sockaddr_in client, socklen_t addrlen)
  * Returns an EXIT_-constant indicating success or failure.
  */
 
-static int  clients(int sock) {
+static int  clients(int sock, int port) {
     int                 clisock = -1;   // Socket to client
     socklen_t           addrlen;        // Address data size of client
     struct sockaddr_in  client;         // Client address data
@@ -179,18 +182,22 @@ static int  clients(int sock) {
     addrlen = sizeof(struct sockaddr_in);
 
     for (;;) {
-        printf("Waiting for client!\n");
+#ifdef VERBOSE
+        printf("Waiting for client at port %u!\n", (unsigned int) port);
+#endif
 
         clisock = accept(sock, (struct sockaddr *) &client,
             (socklen_t *) &addrlen);
         if (clisock < 0) {
             return EXIT_ERR;
         }
+#ifdef VERBOSE
         printf("Got client at port %d.\n", ntohs(client.sin_port));
+#endif
 
         switch (fork()) {
             case -1:
-                fprintf(stderr, "fork() failed!\n");
+                fprintf(stderr, "fork() failed! %s\n", strerror(errno));
                 close(clisock);
                 return EXIT_ERR;
             case 0:
@@ -253,7 +260,9 @@ int main(int argc, char **argv) {
                     usage(stderr);
                     return EXIT_USER;
                 }
-                printf("lport: %ld\n", lport);
+#ifdef VERBOSE
+                printf("lstening port: %ld\n", lport);
+#endif
                 port = atoi(optarg);
                 break;
 
@@ -275,7 +284,7 @@ int main(int argc, char **argv) {
     }
 
     /* Handle calling clients */
-    ret = clients(sock);
+    ret = clients(sock, port);
 
     socker(SOCKACT_END);
 

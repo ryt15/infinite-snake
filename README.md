@@ -112,3 +112,16 @@ CC=cc -Wall -DVERBOSE
 - Let snake.py read its configuration from the server.
 - Save all steps to the server, and make it possible to replay a game.
 - Let two or more players compete on the same playground, using the server to monitor the game.
+
+
+## C++ Server Variant
+
+There's also a snake server variant written in C++ in the making, with
+most of the code taken from the C variant. More work is needed to make it
+proper C++, but it seems to work well. You can start it like this:
+
+```
+./snake++srv
+```
+
+It takes the same options as the C variant (snakesrv).

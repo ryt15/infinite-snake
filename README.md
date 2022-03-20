@@ -10,9 +10,9 @@ but to use it as an example to learn programming from.
 
 I suggest you start by playing it a few times.
 The basic version is written in Python but it uses the semi-graphic
-library curses, so it's intended to be used on a UNIX or Linux machine.
+library _curses_, so it's intended to be used on a UNIX or Linux machine.
 If you don't have any and are stuck with Windows, try to install a
-Virtual Machine with Linux on it and run it from there.
+virtual machine with Linux on it and run it from there.
 
 After some playing, you'll soon get bored and it's time to take real action!
 
@@ -25,7 +25,6 @@ After some playing, you'll soon get bored and it's time to take real action!
 - Add colors and/or fancier graphical symbols.
 - Add sound.
 - Separate all texts from the source code. Make it possible to select language with a command-line switch.
-- Split the program into a client and a server which communicate via tcp/ip or udp/ip.
 - Add more snakes on the playground, reading steering input from the net or named pipes etc.
 - Add more playgrounds on the display.
 - Make it possible for snakes to move between playgrounds.
@@ -41,7 +40,7 @@ After some playing, you'll soon get bored and it's time to take real action!
 ### Hints
 
 - Since the program enters graphics mode, errors won't be visible. But since they are written to stderr you can redirect them into a separate file. How?
-- Analyze the source code with pylint and make that a habit. Start by fixing some of the existing complaints.
+- Analyze the source code with _pylint_ and make that a habit. Start by fixing some of the existing complaints.
 
 
 ## Synopsis
@@ -59,12 +58,68 @@ After some playing, you'll soon get bored and it's time to take real action!
            -u: Assign a user nickname (max 16 chars) for score table
 ```
 
+## Configuration file
+
+With switch `-C` (upper-case C!) you can mention a configuration file from
+which `snake.py` shall read its parameters.
+Note that if a parameter is given both in the configuration file and as
+a CLI option, the last (from left to right) mentioned will take effect.
+
+### Configuration File Syntax
+
+The configuration file must contain one key-value pair per line, which must
+begin in the first (leftmost) column. Each key-value pair must be
+separated by a colon and a blank. All values are case sensitive.
+Empty lines are allowed. A line starting with `#` is considered a comment.
+Unknown keys are ignored.
+
+Here follows a mapping table between CLI switches and key values:
+
+| CLI | Config   |
+| --- | -------- |
+| r   | rows     |
+| c   | cols     |
+| l   | snakelen |
+| t   | timeout  |
+| P   | port     |
+| H   | host     |
+| u   | user     |
+
+Not all CLI switches have a corresponding config file key!
+
+### Config File Example
+
+```
+# Playground height (including borders)
+rows: 20
+# Playground width (including borders)
+cols: 30
+# Initial snake length
+snakelen: 6
+# Number of milliseconds until snake moves even if no key is pressed
+timeout: 300
+# User name
+user: Nesbitt
+```
+
+### Command to Start snake.py Using Config File Example
+
+```
+./snake.py -H localhost -P 8888 -C snake.cnf -u Pyton
+```
+
+Note that the user name reported to the server will be _Pyton_, not
+_Nesbitt_, since the `-u` switch appears _after_ the `-C` switch!
+
+
+
 ## Server
 
 A server written in C has now been added. It doesn't do much yet, just
-recieves some information from the client and respons with "200 OK".
+recieves some information from the client and respons with `200 OK` for
+each line it receives from the client.
 
-Feel free to study and update the server's source code (snakesrv.c),
+Feel free to study and update the server's source code (`snakesrv.c`),
 extend it do do something useful.
 
 To make the client and server communicate, you need to start the server
@@ -80,7 +135,7 @@ Then start the client (the game), on another terminal, like this:
 ./snake.py -H localhost -P 8888
 ```
 
-You can use the -h switch in both programs to get help.
+You can use the `-h` switch in both programs to get help.
 
 You can stop the server like this:
 
@@ -98,7 +153,8 @@ To set the switch temporarily, just recompile like this:
 cc -DVERBOSE snakesrv.c -o snakesrv
 ```
 
-To add it permanently, change this makefile line
+To add it permanently, change this `makefile` line
+
 ```
 CC=cc -Wall
 ```
@@ -110,7 +166,7 @@ CC=cc -Wall -DVERBOSE
 ## Recommended Actions for snake.py and snakesrv.c
 
 - Add a database or file to the server, to save high-score to.
-- Let snake.py read its configuration from the server.
+- Let `snake.py` read its configuration from the server.
 - Save all steps to the server, and make it possible to replay a game.
 - Let two or more players compete on the same playground, using the server to monitor the game.
 
@@ -122,9 +178,9 @@ The current client/server protocol (version 0.3) is very simple.
 The client always initiates transmission by sending a byte encoded
 message of maximum 1024 ASCII bytes, without any CR or LF termination.
 
-The server always responds with the ASCII byte sequence "200 OK".
+The server always responds with the ASCII byte sequence `200 OK`.
 
-All messages from client start with "G>". This G stands for Game, meaning
+All messages from client start with `G>`. This `G` stands for _Game_, meaning
 that the message is related to what happens on the playground.
 After this comes a three-letter upper-case tag, that tells what the rest
 of the sequence contains. The tags may be one of the following:
@@ -150,7 +206,7 @@ G>BEG,VER:0.2,PID:5288,PRT:43344,RWS:10,CLS:20,LEN:3,TIO:300,USR:Moltas,HSH:e338
 - CLS is the number of columns on the playground, including borders
 - LEN is the initial size of the snake
 - TIO is the timeout in ms between snake moves
-- USR is user's nickname, if given (via parameter -u)
+- USR is user's nickname, if given (via parameter `-u`)
 - HSH is a 16-byte hash unique for the current game session
 
 You can use either HSH, PID or PRT to keep track of an individual game.
@@ -161,8 +217,8 @@ G>END,SCR:11,SIG:-1,FAI:1,PID:5288,PRT:43344,USR:,HSH:e3382993b5877b79
 ```
 
 - SCR is the score
-- SIG is termination signal, if any. If none received, the value is -1
-- FAI is the reason for failure (see constants FAIL... in snake.py)
+- SIG is termination signal, if any. If none received, the value is `-1`
+- FAI is the reason for failure (see constants `FAIL`... in `snake.py`)
 - PID same as for BEG above
 - PRT same as for BEG above
 - USR same as for BEG above (in this example, no user name is assigned)
@@ -193,4 +249,4 @@ proper C++, but it seems to work well. You can start it like this:
 ./snake++srv
 ```
 
-It takes the same options as the C variant (snakesrv).
+It takes the same options as the C variant (`snakesrv`).

@@ -114,6 +114,69 @@ CC=cc -Wall -DVERBOSE
 - Let two or more players compete on the same playground, using the server to monitor the game.
 
 
+## Protocol
+
+The current client/server protocol (version 0.2) is very simple.
+
+The client always initiates transmission by sending a byte encoded
+message of maximum 1024 ASCII bytes, without any CR or LF termination.
+
+The server always responds with the ASCII byte sequence "200 OK".
+
+All messages from client start with "G>". This G stands for Game, meaning
+that the message is related to what happens on the playground.
+After this comes a three-letter upper-case tag, that tells what the rest
+of the sequence contains. The tags may be one of the following:
+
+- BEG - Tells that a new game is started.
+- END - Tells that a game ended.
+- MRK - Tells that a cell on the playground has been marked.
+- UNM - Tells that a cell on the playground has been cleared.
+
+Now follows a comma and a sequence of comma-separated key-value-pairs,
+separated by colon. The keys are always three-letter-uppercase ASCII.
+
+Syntax for the various tags are as follows (shown with example values):
+
+```
+G>BEG,VER:0.2,PID:5288,PRT:43344,RWS:10,CLS:20,LEN:3,TIO:300
+```
+
+- VER is the protocol version
+- PID is the client's process ID
+- PRT is the client's port number
+- RWS is the number of rows on the playground, including borders
+- CLS is the number of columns on the playground, including borders
+- LEN is the initial size of the snake
+- TIO is the timeout in ms between snake moves
+
+You can use either PID or PRT to keep track of an individual snake.
+
+```
+G>END,SCR:11,SIG:-1,FAI:1,PID:5288,PRT:43344
+```
+
+- SCR is the score
+- SIG is termination signal, if any. If none received, the value is -1
+- FAI is the reason for failure (see constants FAIL_... in snake.py)
+- PID Same as for BEG above
+- PRT Same as for BEG above
+
+```
+G>MRK,ROW:5,COL:7,WAT:2
+```
+
+- ROW is the row that was marked
+- COL is the column that was marked
+- WAT is the code identifying what kind of mark was set
+
+```
+G>UNM,ROW:1,COL:16,WAT:2
+```
+
+As MRK above.
+
+
 ## C++ Server Variant
 
 There's also a snake server variant written in C++ in the making, with

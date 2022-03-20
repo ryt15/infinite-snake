@@ -23,7 +23,7 @@ from datetime import datetime
 # import pdb
 
 # Version (as presented to server)
-CLIVER = "0.1"
+CLIVER = "0.2"
 
 # Exit codes
 EXIT_OK = 0     # All is well
@@ -232,8 +232,8 @@ class Playground:
         logging.debug('mark %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
             str(int(row)), str(int(col)), str(what))
-        self.report("G>MRK,R:" + str(row) + ",C:" +  str(col) + ",W:" + \
-            str(what))
+        self.report("G>MRK,ROW:" + str(int(row)) + ",COL:" +  str(int(col)) + \
+            ",WAT:" + str(what))
         return was
 
 
@@ -247,8 +247,8 @@ class Playground:
         logging.debug('umrk %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
             str(int(row)), str(int(col)), str(what))
-        self.report("G>UNM,R:" + str(row) + ",C:" +  str(col) + ",W:" + \
-            str(what))
+        self.report("G>UNM,ROW:" + str(int(row)) + ",COL:" +  str(int(col)) + \
+            ",WAT:" + str(what))
         return was
 
 

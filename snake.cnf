@@ -12,3 +12,5 @@ cols: 30
 snakelen: 6
 # Number of milliseconds until snake moves even if no key is pressed
 timeout: 300
+# User name
+user: ElonMask

@@ -43,23 +43,17 @@ class Exit {
 };
 
 
-/* socker(action) values */
-#define SOCKACT_START   0   /* Create socket */
-#define SOCKACT_END     1   /* Destroy socket */
-
-
 /* socker()
- * Creates or destroys the initial socket from which we shall accept
+ * Creates or destroys the listener socket from which we shall accept
  * calls from clients. The socket is of TCP/IP stream type.
  * To create the socket, call with action=SOCKACT_START and port
  * set to a free and valid port number to listen to.
- * To destroy the socket, call with action=SOCKACT_END.
- * Successive calls with action=SOCKACT_END is permitted.
- * Successive calls with action=SOCKACT_START is permitted and
- * will result in a destruction of existing socket (if any) and
- * creation of a new (even if the port numbers don't change).
- * Returns the socket as a positive integer or -1 on failure and
- * after destroying the socket.
+ * A new socket is created for each new Socker object but they must
+ * listen to different ports.
+ * When a Socker object is deleted, its socket is first closed.
+ * It is possible to close the socket for an object by calling its
+ * end() method, and a new socket (to the same port) can later be
+ * reopened using the start().
  */
 
 class Socker {
@@ -81,22 +75,27 @@ class Socker {
             end();
         }
 
+        // Return the socket
         int getsock(void) {
             return sock;
         }
 
+        // Return port number
         int getport(void) {
             return port;
         }
 
+        // Check if the socket is open
         int active(void) {
             return sock >= 0;
         }
 
+        // Check if the port number is valid
         int validport(void) {
             return port > 0;
         }
 
+        // Create and set up the socket
         int start() {
             if (active()) {
                 end();
@@ -124,6 +123,7 @@ class Socker {
             return sock;
         }
 
+        // Close the socket
         void end(void) {
 #ifdef VERBOSE
             cout << "Socker.end()\n";

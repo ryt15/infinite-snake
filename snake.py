@@ -434,7 +434,7 @@ class Help:
     """ Show help """
     usage_message = \
     '''Usage: snake [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
-                    [-P port -H host]
+             [-P port -H host]
        -h: Show this help and exit
        -C: Read configuration from cfile
        -c: Set playground height (including borders)
@@ -443,10 +443,17 @@ class Help:
        -L: Log to file lf
        -P, -H Connect to server host at given port
     '''
+
+    @classmethod
+    def getusage(cls):
+        """ Returns usage message """
+        return cls.usage_message
+
     @classmethod
     def usage(cls):
         """ Print usage message """
-        print(cls.usage_message)
+        # print(cls.usage_message)
+        print(cls.getusage())
 
 
 # Configuration

@@ -570,9 +570,13 @@ class Server:
         ret = self.sock.recv(maxlen).decode()
         return ret
 
-    def newgame(self):
-        """ Reports start of a new game to the server, if connected """
-        head = ('G>BEG,VER:' + CLIVER).encode()
+    def srvhead(self):
+        """ Creates and sends header to server, if connected """
+        if self.use is False:
+            return
+        ownport = self.sock.getsockname()[1]
+        head = ('G>BEG,VER:' + CLIVER + ',PID:' + str(os.getpid()) \
+            + ",PRT:" + str(ownport)).encode()
         self.send(head)
         self.recv(1024)
         head = ('G>R:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + ',C:' + \
@@ -584,6 +588,10 @@ class Server:
         self.send(head)
         self.recv(1024)
 
+    def newgame(self):
+        """ Reports start of a new game to the server, if connected """
+        self.srvhead()
+
     def endgame(self, score, failcode, sig=-1):
         """ Reports status about ended game to the server, if connected """
         head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
@@ -594,13 +602,14 @@ class Server:
     def stop(self):
         """ Closes connection to server, if connected """
         if self.use is True:
+            self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
 
     def trap(self, sig):
         """ Terminates server connection on signal reception """
         if self.use is True:
             self.endgame(-1, -1, sig)
-            self.sock.close()
+            self.stop()
 
 
 

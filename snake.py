@@ -137,7 +137,8 @@ class Playground:
     OBJ_SNAKE = 16  # There's a snake (head or body) here
 
 
-    def __init__(self, cnf):
+    def __init__(self, cnf, server=None):
+        self.server = server
         self.rows = cnf.getconf(CNFKEY_ROWS[1])
         self.cols = cnf.getconf(CNFKEY_COLS[1])
         self.timo = cnf.getconf(CNFKEY_TIMO[1])
@@ -155,6 +156,14 @@ class Playground:
         for row in range(self.rows):
             self.pgr[row][0] = self.OBJ_BORDER
             self.pgr[row][self.cols - 1] = self.OBJ_BORDER
+
+
+    def report(self, text):
+        """ Report event to server, if connected """
+        if self.server is None:
+            return
+        self.server.send(text.encode())
+        self.server.recv(1024)
 
 
     def feed(self):
@@ -222,7 +231,9 @@ class Playground:
             self.pgr[int(row)][int(col)] = self.OBJ_EMPTY
         logging.debug('mark %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
-	    str(int(row)), str(int(col)), str(what))
+            str(int(row)), str(int(col)), str(what))
+        self.report("G>MRK,R:" + str(row) + ",C:" +  str(col) + ",W:" + \
+            str(what))
         return was
 
 
@@ -235,7 +246,9 @@ class Playground:
         self.pgr[int(row)][int(col)] &= ~what
         logging.debug('umrk %s %s, %s, %s', \
             datetime.now().strftime('%H:%M:%S %f'), \
-	    str(int(row)), str(int(col)), str(what))
+            str(int(row)), str(int(col)), str(what))
+        self.report("G>UNM,R:" + str(row) + ",C:" +  str(col) + ",W:" + \
+            str(what))
         return was
 
 
@@ -284,7 +297,7 @@ class Worm:
 
     def __init__(self, playground, cnf, \
         row=None, col=None, rstep=None, cstep=None):
-        self.pgr = playground    # Current playground
+        self.pgr = playground   # Current playground
         self.cnf = cnf          # Configuration
         self.length = cnf.getconf(CNFKEY_SLEN[1])    # Expected length
         self.curlen = 1         # Current length including head
@@ -570,34 +583,36 @@ class Server:
         ret = self.sock.recv(maxlen).decode()
         return ret
 
-    def srvhead(self):
+    def srvhead(self, tag, score=None, failcode=None, sig=None):
         """ Creates and sends header to server, if connected """
         if self.use is False:
             return
         ownport = self.sock.getsockname()[1]
-        head = ('G>BEG,VER:' + CLIVER + ',PID:' + str(os.getpid()) \
-            + ",PRT:" + str(ownport)).encode()
-        self.send(head)
-        self.recv(1024)
-        head = ('G>R:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + ',C:' + \
-            str(self.cnf.getconf(CNFKEY_COLS[1]))).encode()
-        self.send(head)
-        self.recv(1024)
-        head = ('G>S:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + ',T:' + \
-            str(self.cnf.getconf(CNFKEY_TIMO[1]))).encode()
+        if "END" == tag:
+            head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
+                str(failcode)
+            head = head + ',PID:' + str(os.getpid()) + ",PRT:" + str(ownport)
+            head = head.encode()
+        elif "BEG" == tag:
+            head = 'G>' + tag + ',VER:' + CLIVER + ',PID:' + str(os.getpid()) \
+                + ",PRT:" + str(ownport)
+            head = head + ',RWS:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + \
+                ',CLS:' + str(self.cnf.getconf(CNFKEY_COLS[1]))
+            head = head + ',LEN:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + \
+                ',TIO:' + str(self.cnf.getconf(CNFKEY_TIMO[1]))
+            head = head.encode()
+        else:
+            head = ('G>' + tag).encode()
         self.send(head)
         self.recv(1024)
 
     def newgame(self):
         """ Reports start of a new game to the server, if connected """
-        self.srvhead()
+        self.srvhead('BEG')
 
     def endgame(self, score, failcode, sig=-1):
         """ Reports status about ended game to the server, if connected """
-        head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
-            str(failcode)
-        self.send(head.encode())
-        self.recv(1024)
+        self.srvhead('END', score, failcode, sig)
 
     def stop(self):
         """ Closes connection to server, if connected """
@@ -691,7 +706,7 @@ SERVER.newgame()
 
 
 # Initialize display and playground
-PGR = Playground(CONF)
+PGR = Playground(CONF, SERVER)
 
 
 # Cleanup handler

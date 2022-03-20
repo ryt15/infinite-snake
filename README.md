@@ -48,7 +48,7 @@ After some playing, you'll soon get bored and it's time to take real action!
 
 ```
 ./snake.py [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
-           [-P port -H host]
+           [-P port -H host] [-u user]
            -h: Show this help and exit
            -C: Read configuration from cfile
            -c: Set playground height (including borders)
@@ -56,6 +56,7 @@ After some playing, you'll soon get bored and it's time to take real action!
            -t: Set time in ms between snake steps
            -L: Log to file lf
            -P, -H Connect to server host at given port
+           -u: Assign a user nickname (max 16 chars) for score table
 ```
 
 ## Server
@@ -116,7 +117,7 @@ CC=cc -Wall -DVERBOSE
 
 ## Protocol
 
-The current client/server protocol (version 0.2) is very simple.
+The current client/server protocol (version 0.3) is very simple.
 
 The client always initiates transmission by sending a byte encoded
 message of maximum 1024 ASCII bytes, without any CR or LF termination.
@@ -139,7 +140,7 @@ separated by colon. The keys are always three-letter-uppercase ASCII.
 Syntax for the various tags are as follows (shown with example values):
 
 ```
-G>BEG,VER:0.2,PID:5288,PRT:43344,RWS:10,CLS:20,LEN:3,TIO:300
+G>BEG,VER:0.2,PID:5288,PRT:43344,RWS:10,CLS:20,LEN:3,TIO:300,USR:Moltas,HSH:e3382993b5877b79
 ```
 
 - VER is the protocol version
@@ -149,18 +150,23 @@ G>BEG,VER:0.2,PID:5288,PRT:43344,RWS:10,CLS:20,LEN:3,TIO:300
 - CLS is the number of columns on the playground, including borders
 - LEN is the initial size of the snake
 - TIO is the timeout in ms between snake moves
+- USR is user's nickname, if given (via parameter -u)
+- HSH is a 16-byte hash unique for the current game session
 
-You can use either PID or PRT to keep track of an individual snake.
+You can use either HSH, PID or PRT to keep track of an individual game.
+The USR value (if assigned) can be used for building score tables.
 
 ```
-G>END,SCR:11,SIG:-1,FAI:1,PID:5288,PRT:43344
+G>END,SCR:11,SIG:-1,FAI:1,PID:5288,PRT:43344,USR:,HSH:e3382993b5877b79
 ```
 
 - SCR is the score
 - SIG is termination signal, if any. If none received, the value is -1
-- FAI is the reason for failure (see constants FAIL_... in snake.py)
-- PID Same as for BEG above
-- PRT Same as for BEG above
+- FAI is the reason for failure (see constants FAIL... in snake.py)
+- PID same as for BEG above
+- PRT same as for BEG above
+- USR same as for BEG above (in this example, no user name is assigned)
+- HSH same as for BEG above
 
 ```
 G>MRK,ROW:5,COL:7,WAT:2

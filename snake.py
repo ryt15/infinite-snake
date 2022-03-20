@@ -19,11 +19,13 @@ import traceback
 import logging
 import os
 import socket
+import time
+import hashlib
 from datetime import datetime
 # import pdb
 
 # Version (as presented to server)
-CLIVER = "0.2"
+CLIVER = "0.3"
 
 # Exit codes
 EXIT_OK = 0     # All is well
@@ -40,6 +42,10 @@ CNFKEY_SLEN = ['l', 'snakelen', 3]   # Initial snake length
 CNFKEY_TIMO = ['t', 'timeout', 300]  # Time in ms between snake moves
 CNFKEY_PORT = ['P', 'port', 0]       # Server port
 CNFKEY_HOST = ['H', 'host', '']      # Server host
+CNFKEY_USER = ['u', 'user', '']      # User's nickname
+
+# Maximum allowed length of user name (-u)
+USERML = 16
 
 
 
@@ -434,7 +440,7 @@ class Help:
     """ Show help """
     usage_message = \
     '''Usage: snake [-h] [-C cfile] [r rows] [-c cols] [-t to] [-L lf]
-             [-P port -H host]
+             [-P port -H host] [-u user]
        -h: Show this help and exit
        -C: Read configuration from cfile
        -c: Set playground height (including borders)
@@ -442,6 +448,7 @@ class Help:
        -t: Set time in ms between snake steps
        -L: Log to file lf
        -P, -H Connect to server host at given port
+       -u: Assign a user nickname (max 16 chars) for score table
     '''
 
     @classmethod
@@ -469,6 +476,7 @@ class Config:
         self.cnfval_timo = CNFKEY_TIMO[2]
         self.cnfval_port = CNFKEY_PORT[2]
         self.cnfval_host = CNFKEY_HOST[2]
+        self.cnfval_user = CNFKEY_USER[2]
         if conffile is not None:
             self.readconf(conffile)
 
@@ -519,6 +527,9 @@ class Config:
         if CNFKEY_HOST[1] == key:
             self.cnfval_host = val
             return
+        if CNFKEY_USER[1] == key:
+            self.cnfval_user = val
+            return
         errprint("Invalid setconf(key=" + key + ")!")
         sys.exit(EXIT_PROG)
 
@@ -536,6 +547,8 @@ class Config:
             return self.cnfval_port
         if CNFKEY_HOST[1] == key:
             return self.cnfval_host
+        if CNFKEY_USER[1] == key:
+            return self.cnfval_user
         errprint("Invalid getconf(key=" + key + ")!")
         sys.exit(EXIT_PROG)
 
@@ -556,6 +569,7 @@ class Server:
             return
         host = cnf.getconf(CNFKEY_HOST[1])
         port = cnf.getconf(CNFKEY_PORT[1])
+        user = cnf.getconf(CNFKEY_USER[1])
         if port is None or 0 == port:
             return
         if host is None or '' == host:
@@ -563,6 +577,8 @@ class Server:
         self.use = True
         self.host = host
         self.port = port
+        self.user = user
+        self.hash = ''
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.host, self.port))
@@ -599,7 +615,6 @@ class Server:
             head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
                 str(failcode)
             head = head + ',PID:' + str(os.getpid()) + ",PRT:" + str(ownport)
-            head = head.encode()
         elif "BEG" == tag:
             head = 'G>' + tag + ',VER:' + CLIVER + ',PID:' + str(os.getpid()) \
                 + ",PRT:" + str(ownport)
@@ -607,14 +622,22 @@ class Server:
                 ',CLS:' + str(self.cnf.getconf(CNFKEY_COLS[1]))
             head = head + ',LEN:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + \
                 ',TIO:' + str(self.cnf.getconf(CNFKEY_TIMO[1]))
-            head = head.encode()
         else:
             head = ('G>' + tag).encode()
+
+        head = head + ',USR:' + self.user
+        head = head + ',HSH:' + self.hash
+        head = head.encode()
         self.send(head)
         self.recv(1024)
 
     def newgame(self):
         """ Reports start of a new game to the server, if connected """
+        if self.use is True:
+            hash = self.sock.getsockname()[0]
+            hash = hash + ':' + str(self.sock.getsockname()[1])
+            hash = hash + ':' + self.user + ':' + str(time.time())
+            self.hash = hashlib.shake_256(hash.encode()).hexdigest(8)
         self.srvhead('BEG')
 
     def endgame(self, score, failcode, sig=-1):
@@ -697,6 +720,19 @@ try:
             # Server host
             arg += 1
             CONF.setconf(CNFKEY_HOST[1], sys.argv[arg])
+        if '-' + CNFKEY_USER[0] == sys.argv[arg]:
+            # User's nickname
+            arg += 1
+            if str.isascii(sys.argv[arg]) is not True:
+                errprint("-u: User name must only contain A-Z, a-z, 0-9!")
+                sys.exit(EXIT_SYNTAX)
+            if " " in sys.argv[arg]:
+                errprint("-u: User name may not contain blanks!")
+                sys.exit(EXIT_SYNTAX)
+            if len(sys.argv[arg]) < 1 or len(sys.argv[arg]) > USERML:
+                errprint("-u: User name must be 1-16 characters in length!")
+                sys.exit(EXIT_SYNTAX)
+            CONF.setconf(CNFKEY_USER[1], sys.argv[arg])
 except IndexError:
     errprint("Invalid arguments!")
     Help.usage()

@@ -71,6 +71,7 @@ class Socker {
         ~Socker() {
 #ifdef VERBOSE
             cout << "~Socker()\n";
+            cout.flush();
 #endif
             end();
         }
@@ -127,6 +128,7 @@ class Socker {
         void end(void) {
 #ifdef VERBOSE
             cout << "Socker.end()\n";
+            cout.flush();
 #endif
             if (active()) {
                 close(sock);
@@ -323,7 +325,7 @@ int main(int argc, char **argv) {
 
     /* Create listener socket */
     if ((sock = new Socker(port)) < 0) {
-        cerr << "socket() failed (errno " << errno << ") " <<
+        cerr << "Socker() failed (errno " << errno << ") " <<
             strerror(errno) << "\n";
         return Exit::ERR;
     }
@@ -331,7 +333,8 @@ int main(int argc, char **argv) {
     /* Handle calling clients */
     ret = clients(sock);
 
-    sock->end();
+    /* Cleanup */
+    delete sock;
 
     return Exit::OK;
 }

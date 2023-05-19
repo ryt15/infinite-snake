@@ -1,0 +1,13 @@
+Infinite Snake Tags
+-------------------
+
+Annotated git tags
+
+
+v1.0 Primary. See tags.txt!
+
+This first version can be seen as a boilerplate from which students can
+learn some basics. Focus should be on Python, at least v3.8.
+See Recommended Actions for snake.py in README.md. Try to implement
+some of the improvements or feel free to add your own features.
+Avoid checking out later versions until you have tried it yourself!

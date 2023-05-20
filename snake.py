@@ -1,13 +1,13 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3.11
 """snake - a game to be run in a Linux or UNIX terminal.
 For synopsis, see function usage(), or execute with the -h switch.
 
 The main purpose of this program is not to play it, but to learn Python.
 Start by studying it, then try to improve it. See README.md.
-
-By Rein Ytterberg 2020.
-For Python version 3.8
 """
+
+__author__ = "Rein Ytterberg"
+__version__ = "1.0.1"
 
 import sys
 import signal
@@ -634,10 +634,10 @@ class Server:
     def newgame(self):
         """ Reports start of a new game to the server, if connected """
         if self.use is True:
-            hash = self.sock.getsockname()[0]
-            hash = hash + ':' + str(self.sock.getsockname()[1])
-            hash = hash + ':' + self.user + ':' + str(time.time())
-            self.hash = hashlib.shake_256(hash.encode()).hexdigest(8)
+            hashstr = self.sock.getsockname()[0]
+            hashstr = hashstr + ':' + str(self.sock.getsockname()[1])
+            hashstr = hashstr + ':' + self.user + ':' + str(time.time())
+            self.hash = hashlib.shake_256(hashstr.encode()).hexdigest(8)
         self.srvhead('BEG')
 
     def endgame(self, score, failcode, sig=-1):
@@ -772,40 +772,41 @@ def sighand(signum, frame):
     SERVER.trap(signum)
     sys.exit(EXIT_SIGNAL)
 
-signal.signal(signal.SIGINT, sighand)
-signal.signal(signal.SIGHUP, sighand)
-signal.signal(signal.SIGQUIT, sighand)
-signal.signal(signal.SIGTERM, sighand)
+if __name__ == '__main__':
+    signal.signal(signal.SIGINT, sighand)
+    signal.signal(signal.SIGHUP, sighand)
+    signal.signal(signal.SIGQUIT, sighand)
+    signal.signal(signal.SIGTERM, sighand)
 
 
-PGR.feed()   # First piece of food
-PGR.bomb()   # First bomb
-PGR.draw()   # Draw complete playground
+    PGR.feed()   # First piece of food
+    PGR.bomb()   # First bomb
+    PGR.draw()   # Draw complete playground
 
 
 # Create one snake
-WORM = Worm(PGR, CONF)
+    WORM = Worm(PGR, CONF)
 # Determine initial moving direction
-WORM.turn(WORM.STEP_UP, WORM.STEP_IDLE)
+    WORM.turn(WORM.STEP_UP, WORM.STEP_IDLE)
 # Draw the snake initially
-WORM.draw()
+    WORM.draw()
 
 # Start playing
-WORM.play()
+    WORM.play()
 
 # Report to server (if any)
-SERVER.endgame(WORM.getscore(), WORM.getfailcode())
+    SERVER.endgame(WORM.getscore(), WORM.getfailcode())
 
-PGR.keypause()
-PGR.display.graphact()
+    PGR.keypause()
+    PGR.display.graphact()
 
 # Display score
-print("Score:   " + str(WORM.getscore()))
-print("Failure: " + WORM.getfailtext())
+    print("Score:   " + str(WORM.getscore()))
+    print("Failure: " + WORM.getfailtext())
 
 # Log result
-NOW = datetime.now()
-logging.info('Ended %s. Score %s. Fail %s.', \
-    NOW.strftime('%H:%M:%S %f'), str(WORM.getscore()), WORM.getfailtext())
+    NOW = datetime.now()
+    logging.info('Ended %s. Score %s. Fail %s.', \
+        NOW.strftime('%H:%M:%S %f'), str(WORM.getscore()), WORM.getfailtext())
 
-sys.exit(EXIT_OK)
+    sys.exit(EXIT_OK)

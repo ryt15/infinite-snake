@@ -1,10 +1,11 @@
 Infinite Snake Tags
--------------------
+===================
 
-Annotated git tags
+Version documentation by annotated git tags.
 
 
-v1.0 Primary.
+v1.0 Primary
+============
 
 This first version can be seen as a boilerplate from which students can
 learn some basics. Focus should be on Python, at least v3.8.
@@ -12,7 +13,9 @@ See Recommended Actions for snake.py in README.md. Try to implement
 some of the improvements or feel free to add your own features.
 Avoid checking out later versions until you have tried it yourself!
 
-v1.1 MatchCase.
+
+v1.1 MatchCase
+==============
 
 In Python version 3.10 we can use match/case that is similar to, but
 more powerful than, switch/case in some other languages.
@@ -36,3 +39,15 @@ Some other minor fixes:
     $ python3.11 -m pydoc snake
     Without this statement, the snake program will execute instead of
     generating documentation.
+
+
+v1.2 Underscore
+===============
+The main theme is to use underscore whereever motivated.
+
+Other updates:
+A few more suggestions and typo fixes in README.md.
+Global variables renamed: SERVER, LOGFILE, PGR, WORM, CONF.
+Logging configuration and error handling.
+Formatted print statements using f prefix and {}.
+The "hashstr" variable was renamed to "_hash".

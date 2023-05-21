@@ -33,3 +33,6 @@ Blogs
     "How To Write Beautiful Python Code With PEP 8"
     Presentation of useful tools for code style improvement.
     https://www.knowledgehut.com/blog/programming/python-pep8
+
+    "Role of Underscore(_) in Python Tutorial"
+    URL: https://www.datacamp.com/tutorial/role-underscore-python

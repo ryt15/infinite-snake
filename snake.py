@@ -7,7 +7,7 @@ Start by studying it, then try to improve it. See README.md.
 """
 
 __author__ = "Rein Ytterberg"
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import sys
 import signal
@@ -46,6 +46,9 @@ CNFKEY_USER = ['u', 'user', '']      # User's nickname
 
 # Maximum allowed length of user name (-u)
 USERML = 16
+
+# Server client/message maximum size
+MSGSIZE = 1024
 
 
 def errprint(*args, **kargs):
@@ -91,11 +94,11 @@ class Display:
 
         # Playground too small?
         if rows < 3:
-            errprint("Can't make playground " + str(rows) + " rows.")
+            errprint(f"Can't make playground with only {rows} rows.")
             errprint("Minimum row size is 3.")
             sys.exit(EXIT_ARGS)
         if cols < 3:
-            errprint("Can't make playground " + str(cols) + " columns.")
+            errprint(f"Can't make playground with only {cols} columns.")
             errprint("Minimum column size is 3.")
             sys.exit(EXIT_ARGS)
         # Initialize display
@@ -105,13 +108,13 @@ class Display:
         # Playground too large?
         if rows > srows:
             curses.endwin()
-            errprint("Can't make playground " + str(rows) + " rows.")
-            errprint("Maximum row size is " + str(srows) + ".")
+            errprint(f"Can't make playground with {rows} rows.")
+            errprint(f"Maximum row size is {srows}.")
             sys.exit(EXIT_ARGS)
         if cols > scols:
             curses.endwin()
-            errprint("Can't make playground " + str(cols) + " columns.")
-            errprint("Maximum column size is " + str(scols) + ".")
+            errprint(f"Can't make playground with {cols} columns.")
+            errprint(f"Maximum column size is {scols}.")
             sys.exit(EXIT_ARGS)
         # Create the playground on the display
         win = curses.newwin(rows, cols, 0, 0)
@@ -146,27 +149,27 @@ class Playground:
         self.rows = cnf.getconf(CNFKEY_ROWS[1])
         self.cols = cnf.getconf(CNFKEY_COLS[1])
         self.timo = cnf.getconf(CNFKEY_TIMO[1])
-        self.pgr = [[self.OBJ_EMPTY for cc in range(self.cols)]
-                    for rr in range(self.rows)]
+        self.pgr = [[self.OBJ_EMPTY for _ in range(self.cols)]
+                    for _ in range(self.rows)]
         self.display = Display(self.rows, self.cols, self.timo)
         self.win = self.display.getwin()
         self.postoclean = []    # Positions needed to be cleaned
         # Mark borders
         # horizontal borders
-        for col in range(self.cols):
-            self.pgr[0][col] = self.OBJ_BORDER
-            self.pgr[self.rows - 1][col] = self.OBJ_BORDER
+        for _ in range(self.cols):
+            self.pgr[0][_] = self.OBJ_BORDER
+            self.pgr[self.rows - 1][_] = self.OBJ_BORDER
         # vertical borders
-        for row in range(self.rows):
-            self.pgr[row][0] = self.OBJ_BORDER
-            self.pgr[row][self.cols - 1] = self.OBJ_BORDER
+        for _ in range(self.rows):
+            self.pgr[_][0] = self.OBJ_BORDER
+            self.pgr[_][self.cols - 1] = self.OBJ_BORDER
 
-    def report(self, text):
+    def __report(self, text):
         """Report event to server, if connected."""
-        if self.server is None:
+        if not self.server:
             return
         self.server.send(text.encode())
-        self.server.recv(1024)
+        self.server.recv(MSGSIZE)
 
     def feed(self):
         """Place food at random coordinate."""
@@ -177,8 +180,7 @@ class Playground:
             if self.OBJ_EMPTY == (cell &
                (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
                 break
-        logging.debug('feed %s %s, %s, %s',
-                      datetime.now().strftime('%H:%M:%S %f'),
+        logging.debug('feed %s, %s, %s',
                       str(foodpos[0]), str(foodpos[1]), str(cell))
         self.markpos(foodpos[0], foodpos[1], self.OBJ_FOOD)
         self.win.addch(foodpos[0], foodpos[1], self.VIS_FOOD)
@@ -206,9 +208,9 @@ class Playground:
     def cleanpos(self, need_refresh=False):
         """Visibly clean up the Playground."""
         # Blank positions that were marked by call to setcleanpos()
-        for pos in range(0, len(self.postoclean)):
-            self.win.addch(int(self.postoclean[pos][0]),
-                           int(self.postoclean[pos][1]),
+        for _ in range(0, len(self.postoclean)):
+            self.win.addch(int(self.postoclean[_][0]),
+                           int(self.postoclean[_][1]),
                            self.VIS_CLEANER)
         if need_refresh:
             self.win.refresh()
@@ -219,33 +221,31 @@ class Playground:
 
     def markpos(self, row, col, what=OBJ_EMPTY) -> int:
         """Mark this playground position as occupied by something
-           indicated by what, which must be an OBJ_-mnemonic.
-           If what is OBJ_EMPTY, all marks are reset at this position.
-           Returns previous value.
+        indicated by what, which must be an OBJ_-mnemonic.
+        If what is OBJ_EMPTY, all marks are reset at this position.
+        Returns previous value.
         """
         was = self.atpos(int(row), int(col))
         self.pgr[int(row)][int(col)] |= what
         if self.OBJ_EMPTY == what:
             self.pgr[int(row)][int(col)] = self.OBJ_EMPTY
-        logging.debug('mark %s %s, %s, %s',
-                      datetime.now().strftime('%H:%M:%S %f'),
+        logging.debug('mark %s, %s, %s',
                       str(int(row)), str(int(col)), str(what))
-        self.report("G>MRK,ROW:" + str(int(row)) + ",COL:" + str(int(col))
-                    + ",WAT:" + str(what))
+        self.__report("G>MRK,ROW:" + str(int(row)) + ",COL:" + str(int(col))
+                      + ",WAT:" + str(what))
         return was
 
     def unmarkpos(self, row, col, what) -> int:
         """Remove a mark from given position.
-           Mark shall be an OBJ_-menmonic (set by markpos()).
-           Returns previous value.
+        Mark shall be an OBJ_-menmonic (set by markpos()).
+        Returns previous value.
         """
         was = self.atpos(int(row), int(col))
         self.pgr[int(row)][int(col)] &= ~what
-        logging.debug('umrk %s %s, %s, %s',
-                      datetime.now().strftime('%H:%M:%S %f'),
+        logging.debug('umrk %s, %s, %s',
                       str(int(row)), str(int(col)), str(what))
-        self.report("G>UNM,ROW:" + str(int(row)) + ",COL:" + str(int(col))
-                    + ",WAT:" + str(what))
+        self.__report("G>UNM,ROW:" + str(int(row)) + ",COL:" + str(int(col))
+                      + ",WAT:" + str(what))
         return was
 
     def draw(self):
@@ -304,22 +304,24 @@ class Worm:
         self.score = 0              # Score counter
         self.fail = self.FAIL_NONE  # Reason for Game Over
 
-    def inclen(self):
+    def __inclen(self):
         """Increment length of snake."""
         self.length += self.cnf.getconf(CNFKEY_SLEN[1])
 
     def draw(self):
         """Draw the Snake visually."""
         self.pgr.cleanpos(False)
+        # Head
         self.pgr.win.addch(int(self.poss[0][0]),
                            int(self.poss[0][1]),
                            self.HEAD)
-        for tail in range(1, len(self.poss)):
-            self.pgr.win.addch(int(self.poss[tail][0]),
-                               int(self.poss[tail][1]), self.BODY)
+        # Tail
+        for _ in range(1, len(self.poss)):
+            self.pgr.win.addch(int(self.poss[_][0]),
+                               int(self.poss[_][1]), self.BODY)
         self.pgr.win.refresh()
 
-    def step(self):
+    def __step(self):
         """Move the Snake in current direction."""
         needfood = False
         if self.STEP_IDLE == self.rowstep and self.STEP_IDLE == self.colstep:
@@ -337,12 +339,11 @@ class Worm:
         if cell & self.pgr.OBJ_BOMB:
             return self.FAIL_HITBOMB
         if cell & self.pgr.OBJ_FOOD:
-            logging.debug('step %s %s, %s',
-                          datetime.now().strftime('%H:%M:%S %f'),
+            logging.debug('step %s, %s',
                           str(int(newhead[0])), str(int(newhead[1])))
             self.pgr.unmarkpos(newhead[0], newhead[1], self.pgr.OBJ_FOOD)
             needfood = True
-            self.inclen()
+            self.__inclen()
         self.pgr.markpos(newhead[0], newhead[1], self.pgr.OBJ_SNAKE)
         if needfood:
             self.pgr.feed()
@@ -390,7 +391,6 @@ class Worm:
             return self.FAILTEXT[fail]
         except KeyError:
             errprint("Program error - illegal index (" + str(fail) + ")")
-            # for line in traceback.format_stack():
             line = traceback.format_stack()[0]
             errprint(line.strip())
             sys.exit(EXIT_PROG)
@@ -408,7 +408,7 @@ class Worm:
                     self.turn(None, self.STEP_RIGHT)
                 case curses.KEY_UP:
                     self.turn(self.STEP_UP)
-            self.fail = self.step()
+            self.fail = self.__step()
             if not self.fail:
                 self.score += 1
                 self.draw()
@@ -431,7 +431,7 @@ class Help:
     @classmethod
     def intro(cls):
         """Print introductiory summary."""
-        print(cls._usage_intromsg)
+        return cls._usage_intromsg
 
 
 # Configuration
@@ -448,7 +448,7 @@ class Config:
         self.cnfval_port = CNFKEY_PORT[2]
         self.cnfval_host = CNFKEY_HOST[2]
         self.cnfval_user = CNFKEY_USER[2]
-        if conffile is not None:
+        if conffile:
             self.readconf(conffile)
 
     def readconf(self, conffile=None):
@@ -461,21 +461,25 @@ class Config:
             conff.close()
         except FileNotFoundError:
             errprint("Non-existing configuration file: " + self.conffile)
-            sys.exit(EXIT_ARGS)
+            sys.exit(EXIT_ERR)
         except PermissionError:
             errprint("Unreadable configuration file: " + self.conffile)
-            sys.exit(EXIT_ARGS)
+            sys.exit(EXIT_ERR)
         except IsADirectoryError:
             errprint("Configuration file is a directory: " + self.conffile)
-            sys.exit(EXIT_ARGS)
+            sys.exit(EXIT_ERR)
+        except Exception as e:
+            logging.debug(f"readconf exception {e}")
+            errprint(f"ERROR: Config file error {e}.")
+            sys.exit(EXIT_ERR)
 
         keyval = re.compile('^[a-z]+: [a-zA-Z0-9]+')
-        for line in cnf:
-            if not keyval.match(line):
+        for _ in cnf:
+            if not keyval.match(_):
                 continue
-            keypos = re.search(r"\s", line).start()
-            key = line[:keypos - 1]
-            val = line[keypos:].strip()
+            keypos = re.search(r"\s", _).start()
+            key = _[:keypos - 1]
+            val = _[keypos:].strip()
             self.setconf(key, val)
 
     def setconf(self, key, val):
@@ -502,7 +506,7 @@ class Config:
             if CNFKEY_USER[1] == key:
                 self.cnfval_user = val
                 return
-            errprint("Invalid setconf(key=" + key + ")!")
+            errprint(f"Invalid setconf(key=\"{key}\")!")
             sys.exit(EXIT_PROG)
         except ValueError:
             errprint("Invalid argument or config value!")
@@ -542,14 +546,14 @@ class Server:
     def __init__(self, cnf=None):
         self.use = False    # True if we're connected to a server
         self.cnf = cnf
-        if cnf is None:
+        if not cnf:
             return
         host = cnf.getconf(CNFKEY_HOST[1])
         port = cnf.getconf(CNFKEY_PORT[1])
         user = cnf.getconf(CNFKEY_USER[1])
-        if port is None or 0 == port:
+        if not port or 0 == port:
             return
-        if host is None or '' == host:
+        if not host or '' == host:
             return
         self.use = True
         self.host = host
@@ -559,9 +563,6 @@ class Server:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.host, self.port))
-            # self.send(b"Spenatgnebb")
-            # ret = self.sock.recv(1024)
-            # print(f"Socket ret: {ret!r}")
         except ConnectionRefusedError:
             self.use = False
             errprint("Server " + host + " refuses connection on port "
@@ -571,21 +572,20 @@ class Server:
 
     def send(self, data):
         """Send a sequence to the server if connected."""
-        if self.use is False:
+        if not self.use:
             return
-        # print("send: self.sock ", self.sock);
         self.sock.sendall(data)
 
     def recv(self, maxlen=1024) -> str:
         """Receive a string from server if connected."""
-        if self.use is False:
+        if not self.use:
             return None
         ret = self.sock.recv(maxlen).decode()
         return ret
 
-    def srvhead(self, tag, score=None, failcode=None, sig=None):
+    def __srvhead(self, tag, score=None, failcode=None, sig=None):
         """Create and send header to server, if connected."""
-        if self.use is False:
+        if not self.use:
             return
         ownport = self.sock.getsockname()[1]
         if "END" == tag:
@@ -611,15 +611,15 @@ class Server:
     def newgame(self):
         """Report start of a new game to the server, if connected."""
         if self.use:
-            hashstr = self.sock.getsockname()[0]
-            hashstr = hashstr + ':' + str(self.sock.getsockname()[1])
-            hashstr = hashstr + ':' + self.user + ':' + str(time.time())
-            self.hash = hashlib.shake_256(hashstr.encode()).hexdigest(8)
-        self.srvhead('BEG')
+            hash_ = self.sock.getsockname()[0]
+            hash_ = hash_ + ':' + str(self.sock.getsockname()[1])
+            hash_ = hash_ + ':' + self.user + ':' + str(time.time())
+            self.hash = hashlib.shake_256(hash_.encode()).hexdigest(8)
+        self.__srvhead('BEG')
 
     def endgame(self, score, failcode, sig=-1):
         """Report status about ended game to the server, if connected."""
-        self.srvhead('END', score, failcode, sig)
+        self.__srvhead('END', score, failcode, sig)
 
     def stop(self):
         """Close connection to server, if connected."""
@@ -636,28 +636,28 @@ class Server:
 
 def exithand():
     """Cleanup environment before exiting."""
-    SERVER.stop()
-    PGR.display.graphact()
+    _server.stop()
+    _pgr.display.graphact()
 
 
 def sighand(signum, frame):
     """Signal handler callback."""
     del frame
-    PGR.display.graphact()
+    _pgr.display.graphact()
     errprint("Interrupted")
-    SERVER.trap(signum)
+    _server.trap(signum)
     sys.exit(EXIT_SIGNAL)
 
 
 # Stop program from being executed when running pydoc.
 if __name__ == '__main__':
 
-    CONF = Config()
+    _conf = Config()
 
 
 # Command line options and switches
 
-    LOGFILE = None  # Name of log file (if set with -L option)
+    _logfile = None  # Name of log file (if set with -L option)
 
     parser = argparse.ArgumentParser(description=Help.intro())
     parser.add_argument("-L", "--logfile", help="Specify name of log file.")
@@ -679,45 +679,53 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.logfile:
         # Set log file
-        LOGFILE = args.logfile
-        if os.path.exists(LOGFILE):
+        _logfile = args.logfile
+        if os.path.exists(_logfile):
             mystat = os.stat(sys.argv[0])
-            lfstat = os.stat(LOGFILE)
+            lfstat = os.stat(_logfile)
             if mystat.st_dev == lfstat.st_dev and \
                mystat.st_ino == lfstat.st_ino:
                 errprint("ERROR: Log file (-L) same as program file!")
                 sys.exit(EXIT_ARGS)
-        logging.basicConfig(filename=LOGFILE, level=logging.INFO)
-        now = datetime.now()
-        logging.info('Started %s', now.strftime('%H:%M:%S %f'))
+        try:
+            logging.basicConfig(filename=_logfile,
+                                format="%(asctime)s %(levelname)-3.3s "
+                                + "%(message)s",
+                                datefmt='%y%m%d %H:%M:%S',
+                                level=logging.INFO)
+        except PermissionError:
+            errprint(f"ERROR: Can't log to file \"{_logfile}\". "
+                     + "Check permissions!")
+            sys.exit(EXIT_ERR)
+        logging.info('Started')
 
     if args.config:
         # Read configuration from file
-        CONF.readconf(args.config)
+        _conf.readconf(args.config)
 
     if args.rows:
         # Set number of rows on playground
-        CONF.setconf(CNFKEY_ROWS[1], args.rows)
+        _conf.setconf(CNFKEY_ROWS[1], args.rows)
 
     if args.cols:
         # Set number of columns on playground
-        CONF.setconf(CNFKEY_COLS[1], args.cols)
+        _conf.setconf(CNFKEY_COLS[1], args.cols)
 
     if args.snakelen:
         # Set initial snake length
-        CONF.setconf(CNFKEY_SLEN[1], args.snakelen)
+        _conf.setconf(CNFKEY_SLEN[1], args.snakelen)
 
     if args.timeout:
         # Timeout in ms between movements
-        CONF.setconf(CNFKEY_TIMO[1], args.timeout)
+        _conf.setconf(CNFKEY_TIMO[1], args.timeout)
 
     if args.port:
         # Server port
-        CONF.setconf(CNFKEY_PORT[1], args.port)
+        _conf.setconf(CNFKEY_PORT[1], args.port)
 
     if args.host:
         # Server host
-        CONF.setconf(CNFKEY_HOST[1], args.host)
+        _conf.setconf(CNFKEY_HOST[1], args.host)
 
     if args.user:
         # User's nickname
@@ -733,15 +741,15 @@ if __name__ == '__main__':
             errprint(CNFKEY_USER[0]
                      + ": User name must be 1-16 characters in length!")
             sys.exit(EXIT_SYNTAX)
-        CONF.setconf(CNFKEY_USER[1], args.user)
+        _conf.setconf(CNFKEY_USER[1], args.user)
 
 
 # Connect to server (if requested)
-    SERVER = Server(CONF)
-    SERVER.newgame()
+    _server = Server(_conf)
+    _server.newgame()
 
 # Initialize display and playground
-    PGR = Playground(CONF, SERVER)
+    _pgr = Playground(_conf, _server)
 
 # Cleanup handler
     atexit.register(exithand)
@@ -753,36 +761,34 @@ if __name__ == '__main__':
     signal.signal(signal.SIGTERM, sighand)
 
 # Create playground objects
-    PGR.feed()   # First piece of food
-    PGR.bomb()   # First bomb
-    PGR.draw()   # Draw complete playground
+    _pgr.feed()   # First piece of food
+    _pgr.bomb()   # First bomb
+    _pgr.draw()   # Draw complete playground
 
 # Create one snake
-    WORM = Worm(PGR, CONF)
+    _worm = Worm(_pgr, _conf)
 
 # Determine initial moving direction
-    WORM.turn(WORM.STEP_UP, WORM.STEP_IDLE)
+    _worm.turn(_worm.STEP_UP, _worm.STEP_IDLE)
 
 # Draw the snake initially
-    WORM.draw()
+    _worm.draw()
 
 # Start playing
-    WORM.play()
+    _worm.play()
 
 # Report to server (if any)
-    SERVER.endgame(WORM.getscore(), WORM.getfailcode())
+    _server.endgame(_worm.getscore(), _worm.getfailcode())
 
-    PGR.keypause()
-    PGR.display.graphact()
+    _pgr.keypause()
+    _pgr.display.graphact()
 
 # Display score
-    print("Score:   " + str(WORM.getscore()))
-    print("Failure: " + WORM.getfailtext())
+    print("Score:   " + str(_worm.getscore()))
+    print("Failure: " + _worm.getfailtext())
 
 # Log result
-    NOW = datetime.now()
-    logging.info('Ended %s. Score %s. Fail %s.',
-                 NOW.strftime('%H:%M:%S %f'),
-                 str(WORM.getscore()), WORM.getfailtext())
+    logging.info('Ended. Score %s. Fail %s.',
+                 str(_worm.getscore()), _worm.getfailtext())
 
     sys.exit(EXIT_OK)

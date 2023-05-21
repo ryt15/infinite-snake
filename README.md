@@ -20,27 +20,35 @@ After some playing, you'll soon get bored and it's time to take real action!
 - If you found any bugs, try to fix them.
 - Update the program to the latest version of the programming language.
 - Make the source code more compact.
+- Put the main code in one single `main()` function.
+- Reduce the number of global elements.
 - Improve logging. Perhaps add a switch allowing the user to set the log level.
 - Extend the configuration file and/or arguments.
 - Add colors and/or fancier graphical symbols.
 - Add sound.
+- Implement the `with` statement when accessing files and ports.
 - Separate all texts from the source code. Make it possible to select language with a command-line switch.
 - Add more snakes on the playground, reading steering input from the net or named pipes etc.
 - Add more playgrounds on the display.
 - Make it possible for snakes to move between playgrounds.
 - Build a real-time high score table in HTML5, CSS3, JavaScript on a separate web page.
 - Add a depth dimension so the snakes move in a box of several levels.
-- Rewrite the entire program into some other programming language like Kotlin, Go, PHP, C, C++ or JavaScript.
-- Convert a the program so it can run on a web page and a smartphone.
+- Rewrite the entire program into some other programming language like Kotlin, Go, PHP, C, C++ or JavaScript (but not C# or Java).
+- Convert the program so it can run on a web page and a smartphone.
+- Try to build the game as a web app using Web Assembly (aka WASM).
 - Try some AI - Train a neural network to steer a snake.
-- Add autometed tests.
+- Add automated tests.
+- Make the configuration file more flexible. Perhaps change it to JSON format.
+- Use the unittest library.
+- Implement virtualenv.
 - Implement Docker.
 - Make the game public. Allow users to play and charge them some Satoshis via Lightning Network each time.
 
 ### Hints
 
 - Since the program enters graphics mode, errors won't be visible. But since they are written to stderr you can redirect them into a separate file. How?
-- Analyze the source code with _pylint_ and make that a habit. Start by fixing some of the existing complaints.
+- Analyze the source code with tools like _pylint_ or _flake8_ and make it a habit to run them before every `git commit`.
+- Regularly use _pydoc_ to verify that the documentation is OK.
 
 
 ## Synopsis

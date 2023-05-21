@@ -1,9 +1,6 @@
-.snake.py.swp
-.snake.cnf.swp
-.README.md.swp
-.snakesrv.c.swp
+.*.swp
 snakesrv.o
 snakesrv
 snake++srv
 snake++srv.o
-.snake++srv.cpp.swp
+__pycache__

@@ -4,10 +4,35 @@ Infinite Snake Tags
 Annotated git tags
 
 
-v1.0 Primary. See tags.txt!
+v1.0 Primary.
 
 This first version can be seen as a boilerplate from which students can
 learn some basics. Focus should be on Python, at least v3.8.
 See Recommended Actions for snake.py in README.md. Try to implement
 some of the improvements or feel free to add your own features.
 Avoid checking out later versions until you have tried it yourself!
+
+v1.1 MatchCase.
+
+In Python version 3.10 we can use match/case that is similar to, but
+more powerful than, switch/case in some other languages.
+
+We don't have to end lines with backslash to concatenate strings
+split over multiple lines any more. But there are still some limits.
+See Help._usage_intromsg for example.
+
+Some other minor fixes:
+    FileHeader:
+    The file header (still everything is kept in a single file) is
+    improved and implements dunder names.
+
+    Hash:
+    A variable named "hash" was changed to "hashstr" to avoid clash
+    with built-in name.
+
+    Pydoc:
+    By adding "if __name__ == '__main__':" at the start of the program,
+    we can now generate documentation using pydoc from the terminal:
+    $ python3.11 -m pydoc snake
+    Without this statement, the snake program will execute instead of
+    generating documentation.

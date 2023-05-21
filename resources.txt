@@ -1,0 +1,35 @@
+Python resources
+----------------
+
+Below is a list of useful documentation and commands.
+
+PEP-8
+    Python coding style.
+    URL: https://pep8.org
+
+PEP-257
+    Python source code uses docstrings for documentation.
+    URL: https://peps.python.org/pep-0257
+
+Flake8
+    Flake8 is a Python style checker.
+    Command: flake8 snake.py
+    URL: https://www.flake8rules.com
+
+Pydoc
+    Pydoc generates help and documentation from the Python source.
+    Command: python -m pydoc snake
+    URL: https://docs.python.org/3/library/pydoc.html
+
+Format
+    How to format output
+    URL: https://pyformat.info
+
+Match/Case
+    Since Python 3.10 match/case was introduced. Similar to switch/case.
+    URL: https://guicommits.com/python-match-case-examples
+
+Blogs
+    "How To Write Beautiful Python Code With PEP 8"
+    Presentation of useful tools for code style improvement.
+    https://www.knowledgehut.com/blog/programming/python-pep8

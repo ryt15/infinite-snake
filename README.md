@@ -31,9 +31,9 @@ After some playing, you'll soon get bored and it's time to take real action!
 - Add more snakes on the playground, reading steering input from the net or named pipes etc.
 - Add more playgrounds on the display.
 - Make it possible for snakes to move between playgrounds.
-- Build a real-time high score table in HTML5, CSS3, JavaScript on a separate web page.
+- Build a real-time high score table in HTML5, CSS3, JavaScript or TypeScript on a separate web page.
 - Add a depth dimension so the snakes move in a box of several levels.
-- Rewrite the entire program into some other programming language like Kotlin, Go, PHP, C, C++ or JavaScript (but not C# or Java).
+- Rewrite the entire program into some other programming language like Kotlin, Go, PHP, C, C++, Rust, TypeScript or JavaScript (but not C# or Java).
 - Convert the program so it can run on a web page and a smartphone.
 - Try to build the game as a web app using Web Assembly (aka WASM).
 - Try some AI - Train a neural network to steer a snake.

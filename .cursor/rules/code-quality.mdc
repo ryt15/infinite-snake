@@ -1,0 +1,11 @@
+---
+alwaysApply: true
+---
+## PEP 8 Compliance
+Ensure all code follows PEP 8: max 79 chars/line, snake_case vars, 4-space indents.
+
+## Docstrings
+Add Google-style docstrings to functions/classes: params, returns, purpose.
+
+## Error Handling
+Wrap I/O/network in try-except; log to stderr via logging module.

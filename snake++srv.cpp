@@ -17,11 +17,10 @@
 #include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
-
-#include <stdarg.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include <memory>
 
 using namespace std;
 
@@ -285,7 +284,6 @@ static void termsig(int sig) {
 
 
 int main(int argc, char **argv) {
-    Socker *sock;
     int port = DEF_PORT;
     int ret = Exit::OK;
     int opt;
@@ -324,17 +322,21 @@ int main(int argc, char **argv) {
     }
 
     /* Create listener socket */
-    if ((sock = new Socker(port)) < 0) {
-        cerr << "Socker() failed (errno " << errno << ") " <<
+    std::unique_ptr<Socker> sock = std::make_unique<Socker>(port);
+    if (!sock) {
+        cerr << "Failed to allocate Socker\n";
+        return Exit::ERR;
+    }
+
+    /* Check if socket started successfully */
+    if (sock->getsock() < 0) {
+        cerr << "Socker::start() failed (errno " << errno << "): " <<
             strerror(errno) << "\n";
         return Exit::ERR;
     }
 
     /* Handle calling clients */
-    ret = clients(sock);
+    ret = clients(sock.get());
 
-    /* Cleanup */
-    delete sock;
-
-    return Exit::OK;
+    return ret;
 }

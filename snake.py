@@ -1,4 +1,5 @@
 #!/usr/bin/env python3.12
+# pylint: disable=too-many-lines
 """snake - a game to be run in a Linux or UNIX terminal.
 Call the program with --help or do python3.11 -m pydoc snake.
 
@@ -21,7 +22,6 @@ import os
 import socket
 import time
 import hashlib
-from datetime import datetime
 import argparse
 
 # Version (as presented to server)
@@ -196,6 +196,7 @@ class Playground:
     OBJ_CLEAR = 8   # This position should be cleaned visibly, and reset
     OBJ_SNAKE = 16  # There's a snake (head or body) here
 
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, cnf, server=None):
         self.server = server
         self.rows = cnf.getconf(CNFKEY_ROWS[1])
@@ -253,8 +254,7 @@ class Playground:
                       str(foodpos[0]), str(foodpos[1]), str(cell))
         self.markpos(foodpos[0], foodpos[1], self.OBJ_FOOD)
         self.win.addch(foodpos[0], foodpos[1], self.VIS_FOOD)
-        self.win.addstr(0, 2, "  Food: " + str(int(foodpos[0]))
-                        + " " + str(int(foodpos[1])) + "  ")
+        self.win.addstr(0, 2, f"  Food: {int(foodpos[0])} {int(foodpos[1])}  ")
         self.win.refresh()
 
     def bomb(self):
@@ -283,10 +283,8 @@ class Playground:
             need_refresh (bool): If True, refresh the window after cleanup.
         """
         # Blank positions that were marked by call to setcleanpos()
-        for _ in range(0, len(self.postoclean)):
-            self.win.addch(int(self.postoclean[_][0]),
-                           int(self.postoclean[_][1]),
-                           self.VIS_CLEANER)
+        for pos in self.postoclean:
+            self.win.addch(int(pos[0]), int(pos[1]), self.VIS_CLEANER)
         if need_refresh:
             self.win.refresh()
 
@@ -319,8 +317,7 @@ class Playground:
         self.pgr[int(row)][int(col)] |= what
         if self.OBJ_EMPTY == what:
             self.pgr[int(row)][int(col)] = self.OBJ_EMPTY
-        logging.debug('mark %s, %s, %s',
-                      str(int(row)), str(int(col)), str(what))
+        logging.debug('mark %d, %d, %s', int(row), int(col), what)
         self.__report("G>MRK,ROW:" + str(int(row)) + ",COL:" + str(int(col))
                       + ",WAT:" + str(what))
         return was
@@ -338,8 +335,7 @@ class Playground:
         """
         was = self.atpos(int(row), int(col))
         self.pgr[int(row)][int(col)] &= ~what
-        logging.debug('umrk %s, %s, %s',
-                      str(int(row)), str(int(col)), str(what))
+        logging.debug('umrk %d, %d, %s', int(row), int(col), what)
         self.__report("G>UNM,ROW:" + str(int(row)) + ",COL:" + str(int(col))
                       + ",WAT:" + str(what))
         return was
@@ -394,6 +390,7 @@ class Worm:
         FAIL_HITBOMB:  "Hit a bomb"
     }
 
+    # pylint: disable=too-many-instance-attributes,too-many-arguments
     def __init__(self, playground, cnf,
                  row=None, col=None, rstep=None, cstep=None):
         self.pgr = playground   # Current playground
@@ -421,9 +418,9 @@ class Worm:
                            int(self.poss[0][1]),
                            self.HEAD)
         # Tail
-        for _ in range(1, len(self.poss)):
-            self.pgr.win.addch(int(self.poss[_][0]),
-                               int(self.poss[_][1]), self.BODY)
+        for idx, _ in enumerate(self.poss[1:], start=1):
+            self.pgr.win.addch(int(self.poss[idx][0]),
+                               int(self.poss[idx][1]), self.BODY)
         self.pgr.win.refresh()
 
     def __step(self):
@@ -670,9 +667,9 @@ class Config:
                 return
             errprint(f"Invalid setconf(key=\"{key}\")!")
             sys.exit(EXIT_PROG)
-        except ValueError:
+        except ValueError as exc:
             errprint("Invalid argument or config value!")
-            sys.exit(EXIT_SYNTAX)
+            raise SystemExit(EXIT_SYNTAX) from exc
 
     def getconf(self, key):
         """Return a configuration value by key.
@@ -963,10 +960,10 @@ def _configure_logging(args, log_level: int, logfile: str | None) -> None:
             file_handler.setFormatter(formatter)
             file_handler.setLevel(log_level)
             root_logger.addHandler(file_handler)
-        except PermissionError:
+        except PermissionError as exc:
             errprint(f"ERROR: Can't log to file \"{logfile}\". "
                      + "Check permissions!")
-            raise SystemExit(EXIT_ERR)
+            raise SystemExit(EXIT_ERR) from exc
     logging.info('Started')
 
 
@@ -1122,4 +1119,3 @@ def main() -> int:
 # Stop program from being executed when running pydoc.
 if __name__ == '__main__':
     sys.exit(main())
-

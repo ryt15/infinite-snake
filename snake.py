@@ -7,7 +7,7 @@ Start by studying it, then try to improve it. See README.md.
 """
 
 __author__ = "Rein Ytterberg"
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 import sys
 import signal
@@ -634,30 +634,31 @@ class Server:
             self.stop()
 
 
-def exithand():
-    """Cleanup environment before exiting."""
-    _server.stop()
-    _pgr.display.graphact()
+def make_exithand(server, playground):
+    """Create an exit handler that cleans up resources."""
+    def _exithand():
+        server.stop()
+        playground.display.graphact()
+    return _exithand
 
 
-def sighand(signum, frame):
-    """Signal handler callback."""
-    del frame
-    _pgr.display.graphact()
-    errprint("Interrupted")
-    _server.trap(signum)
-    sys.exit(EXIT_SIGNAL)
+def make_sighand(server, playground):
+    """Create a signal handler that preserves curses and informs server."""
+    def _sighand(signum, frame):
+        del frame
+        playground.display.graphact()
+        errprint("Interrupted")
+        server.trap(signum)
+        sys.exit(EXIT_SIGNAL)
+    return _sighand
 
 
-# Stop program from being executed when running pydoc.
-if __name__ == '__main__':
+def main() -> int:
+    """Program entry point. Parses args, sets up resources, runs game."""
+    conf = Config()
 
-    _conf = Config()
-
-
-# Command line options and switches
-
-    _logfile = None  # Name of log file (if set with -L option)
+    # Command line options and switches
+    logfile = None  # Name of log file (if set with -L option)
 
     parser = argparse.ArgumentParser(description=Help.intro())
     parser.add_argument("-L", "--logfile", help="Specify name of log file.")
@@ -677,118 +678,125 @@ if __name__ == '__main__':
     parser.add_argument("-" + CNFKEY_USER[0], "--" + CNFKEY_USER[1],
                         help="Player's user name.")
     args = parser.parse_args()
+
     if args.logfile:
         # Set log file
-        _logfile = args.logfile
-        if os.path.exists(_logfile):
+        logfile = args.logfile
+        if os.path.exists(logfile):
             mystat = os.stat(sys.argv[0])
-            lfstat = os.stat(_logfile)
+            lfstat = os.stat(logfile)
             if mystat.st_dev == lfstat.st_dev and \
                mystat.st_ino == lfstat.st_ino:
                 errprint("ERROR: Log file (-L) same as program file!")
-                sys.exit(EXIT_ARGS)
+                return EXIT_ARGS
         try:
-            logging.basicConfig(filename=_logfile,
+            logging.basicConfig(filename=logfile,
                                 format="%(asctime)s %(levelname)-3.3s "
                                 + "%(message)s",
                                 datefmt='%y%m%d %H:%M:%S',
                                 level=logging.INFO)
         except PermissionError:
-            errprint(f"ERROR: Can't log to file \"{_logfile}\". "
+            errprint(f"ERROR: Can't log to file \"{logfile}\". "
                      + "Check permissions!")
-            sys.exit(EXIT_ERR)
+            return EXIT_ERR
         logging.info('Started')
 
     if args.config:
         # Read configuration from file
-        _conf.readconf(args.config)
+        conf.readconf(args.config)
 
     if args.rows:
         # Set number of rows on playground
-        _conf.setconf(CNFKEY_ROWS[1], args.rows)
+        conf.setconf(CNFKEY_ROWS[1], args.rows)
 
     if args.cols:
         # Set number of columns on playground
-        _conf.setconf(CNFKEY_COLS[1], args.cols)
+        conf.setconf(CNFKEY_COLS[1], args.cols)
 
     if args.snakelen:
         # Set initial snake length
-        _conf.setconf(CNFKEY_SLEN[1], args.snakelen)
+        conf.setconf(CNFKEY_SLEN[1], args.snakelen)
 
     if args.timeout:
         # Timeout in ms between movements
-        _conf.setconf(CNFKEY_TIMO[1], args.timeout)
+        conf.setconf(CNFKEY_TIMO[1], args.timeout)
 
     if args.port:
         # Server port
-        _conf.setconf(CNFKEY_PORT[1], args.port)
+        conf.setconf(CNFKEY_PORT[1], args.port)
 
     if args.host:
         # Server host
-        _conf.setconf(CNFKEY_HOST[1], args.host)
+        conf.setconf(CNFKEY_HOST[1], args.host)
 
     if args.user:
         # User's nickname
         if str.isascii(args.user) is not True:
             errprint(CNFKEY_USER[0]
                      + ": User name must only contain A-Z, a-z, 0-9!")
-            sys.exit(EXIT_SYNTAX)
+            return EXIT_SYNTAX
         if " " in args.user:
             errprint(CNFKEY_USER[0]
                      + ": User name may not contain blanks!")
-            sys.exit(EXIT_SYNTAX)
+            return EXIT_SYNTAX
         if len(args.user) < 1 or len(args.user) > USERML:
             errprint(CNFKEY_USER[0]
                      + ": User name must be 1-16 characters in length!")
-            sys.exit(EXIT_SYNTAX)
-        _conf.setconf(CNFKEY_USER[1], args.user)
+            return EXIT_SYNTAX
+        conf.setconf(CNFKEY_USER[1], args.user)
 
+    # Connect to server (if requested)
+    server = Server(conf)
+    server.newgame()
 
-# Connect to server (if requested)
-    _server = Server(_conf)
-    _server.newgame()
+    # Initialize display and playground
+    pgr = Playground(conf, server)
 
-# Initialize display and playground
-    _pgr = Playground(_conf, _server)
+    # Cleanup handler
+    atexit.register(make_exithand(server, pgr))
 
-# Cleanup handler
-    atexit.register(exithand)
+    # Trap signals
+    sigh = make_sighand(server, pgr)
+    signal.signal(signal.SIGINT, sigh)
+    signal.signal(signal.SIGHUP, sigh)
+    signal.signal(signal.SIGQUIT, sigh)
+    signal.signal(signal.SIGTERM, sigh)
 
-# Trap signals
-    signal.signal(signal.SIGINT, sighand)
-    signal.signal(signal.SIGHUP, sighand)
-    signal.signal(signal.SIGQUIT, sighand)
-    signal.signal(signal.SIGTERM, sighand)
+    # Create playground objects
+    pgr.feed()   # First piece of food
+    pgr.bomb()   # First bomb
+    pgr.draw()   # Draw complete playground
 
-# Create playground objects
-    _pgr.feed()   # First piece of food
-    _pgr.bomb()   # First bomb
-    _pgr.draw()   # Draw complete playground
+    # Create one snake
+    worm = Worm(pgr, conf)
 
-# Create one snake
-    _worm = Worm(_pgr, _conf)
+    # Determine initial moving direction
+    worm.turn(worm.STEP_UP, worm.STEP_IDLE)
 
-# Determine initial moving direction
-    _worm.turn(_worm.STEP_UP, _worm.STEP_IDLE)
+    # Draw the snake initially
+    worm.draw()
 
-# Draw the snake initially
-    _worm.draw()
+    # Start playing
+    worm.play()
 
-# Start playing
-    _worm.play()
+    # Report to server (if any)
+    server.endgame(worm.getscore(), worm.getfailcode())
 
-# Report to server (if any)
-    _server.endgame(_worm.getscore(), _worm.getfailcode())
+    pgr.keypause()
+    pgr.display.graphact()
 
-    _pgr.keypause()
-    _pgr.display.graphact()
+    # Display score
+    print("Score:   " + str(worm.getscore()))
+    print("Failure: " + worm.getfailtext())
 
-# Display score
-    print("Score:   " + str(_worm.getscore()))
-    print("Failure: " + _worm.getfailtext())
-
-# Log result
+    # Log result
     logging.info('Ended. Score %s. Fail %s.',
-                 str(_worm.getscore()), _worm.getfailtext())
+                 str(worm.getscore()), worm.getfailtext())
 
-    sys.exit(EXIT_OK)
+    return EXIT_OK
+
+
+# Stop program from being executed when running pydoc.
+if __name__ == '__main__':
+    sys.exit(main())
+

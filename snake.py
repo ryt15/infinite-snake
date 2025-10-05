@@ -589,21 +589,23 @@ class Server:
             return
         ownport = self.sock.getsockname()[1]
         if "END" == tag:
-            head = 'G>END,SCR:' + str(score) + ',SIG:' + str(sig) + ',FAI:' + \
-                str(failcode)
-            head = head + ',PID:' + str(os.getpid()) + ",PRT:" + str(ownport)
+            head = (
+                f"G>END,SCR:{score},SIG:{sig},FAI:{failcode}"
+                f",PID:{os.getpid()},PRT:{ownport}"
+            )
         elif "BEG" == tag:
-            head = 'G>' + tag + ',VER:' + CLIVER + ',PID:' + str(os.getpid()) \
-                + ",PRT:" + str(ownport)
-            head = head + ',RWS:' + str(self.cnf.getconf(CNFKEY_ROWS[1])) + \
-                ',CLS:' + str(self.cnf.getconf(CNFKEY_COLS[1]))
-            head = head + ',LEN:' + str(self.cnf.getconf(CNFKEY_SLEN[1])) + \
-                ',TIO:' + str(self.cnf.getconf(CNFKEY_TIMO[1]))
+            head = (
+                f"G>{tag},VER:{CLIVER},PID:{os.getpid()},PRT:{ownport}"
+                f",RWS:{self.cnf.getconf(CNFKEY_ROWS[1])}"
+                f",CLS:{self.cnf.getconf(CNFKEY_COLS[1])}"
+                f",LEN:{self.cnf.getconf(CNFKEY_SLEN[1])}"
+                f",TIO:{self.cnf.getconf(CNFKEY_TIMO[1])}"
+            )
         else:
-            head = ('G>' + tag).encode()
+            head = f"G>{tag}"
 
-        head = head + ',USR:' + self.user
-        head = head + ',HSH:' + self.hash
+        head = head + f",USR:{self.user}"
+        head = head + f",HSH:{self.hash}"
         head = head.encode()
         self.send(head)
         self.recv(1024)

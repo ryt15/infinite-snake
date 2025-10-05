@@ -216,6 +216,20 @@ class Playground:
             self.pgr[_][0] = self.OBJ_BORDER
             self.pgr[_][self.cols - 1] = self.OBJ_BORDER
 
+    def _random_empty_position(self):
+        """Return a random empty (row, col) position inside borders.
+
+        Returns:
+            list[int, int]: A suitable row/col coordinate.
+        """
+        while True:
+            pos = [random.randint(1, self.rows - 2),
+                   random.randint(1, self.cols - 2)]
+            cell = self.atpos(pos[0], pos[1])
+            if self.OBJ_EMPTY == (cell &
+               (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
+                return pos
+
     def __report(self, text):
         """Report an event to the server if connected.
 
@@ -233,13 +247,8 @@ class Playground:
         Side Effects:
             Updates the internal grid, updates the display, and may log.
         """
-        while True:
-            foodpos = [random.randint(1, self.rows - 2),
-                       random.randint(1, self.cols - 2)]
-            cell = self.atpos(foodpos[0], foodpos[1])
-            if self.OBJ_EMPTY == (cell &
-               (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
-                break
+        foodpos = self._random_empty_position()
+        cell = self.atpos(foodpos[0], foodpos[1])
         logging.debug('feed %s, %s, %s',
                       str(foodpos[0]), str(foodpos[1]), str(cell))
         self.markpos(foodpos[0], foodpos[1], self.OBJ_FOOD)
@@ -254,13 +263,7 @@ class Playground:
         Side Effects:
             Updates the internal grid and updates the display.
         """
-        while True:
-            bombpos = [random.randint(1, self.rows - 2),
-                       random.randint(1, self.cols - 2)]
-            cell = self.atpos(bombpos[0], bombpos[1])
-            if self.OBJ_EMPTY == (cell &
-               (self.OBJ_FOOD | self.OBJ_BOMB | self.OBJ_SNAKE)):
-                break
+        bombpos = self._random_empty_position()
         self.markpos(bombpos[0], bombpos[1], self.OBJ_BOMB)
         self.win.addch(bombpos[0], bombpos[1], self.VIS_BOMB)
         self.win.refresh()
@@ -461,15 +464,26 @@ class Worm:
                                self.poss[last][1],
                                self.pgr.OBJ_SNAKE)
             self.poss.pop(last)
-        # Check that snake is still inside the playground.
-        # Actually we can also check if (cell & self.pgr.BORDER)
-        if self.poss[0][0] < 1:     # Hit top
+        fail = self.__check_bounds()
+        if fail != self.FAIL_NONE:
+            return fail
+        return self.FAIL_NONE
+
+    def __check_bounds(self):
+        """Check if head is inside borders.
+
+        Returns:
+            int: ``FAIL_NONE`` if inside, otherwise a boundary FAIL code.
+        """
+        head_row = self.poss[0][0]
+        head_col = self.poss[0][1]
+        if head_row < 1:
             return self.FAIL_HITHIGH
-        if self.poss[0][1] < 1:     # Hit left
+        if head_col < 1:
             return self.FAIL_HITLEFT
-        if self.poss[0][0] >= self.pgr.rows - 1:    # Hit bottom
+        if head_row >= self.pgr.rows - 1:
             return self.FAIL_HITLOW
-        if self.poss[0][1] >= self.pgr.cols - 1:    # Hit right
+        if head_col >= self.pgr.cols - 1:
             return self.FAIL_HITRIGHT
         return self.FAIL_NONE
 
@@ -782,11 +796,7 @@ class Server:
         """
         if not self.use:
             return
-        try:
-            ownport = self.sock.getsockname()[1]
-        except OSError as e:
-            logging.error("getsockname error: %s", e, exc_info=True)
-            ownport = -1
+        ownport = self._safe_own_port()
         if "END" == tag:
             head = (
                 f"G>END,SCR:{score},SIG:{sig},FAI:{failcode}"
@@ -806,12 +816,7 @@ class Server:
         head = head + f",USR:{self.user}"
         head = head + f",HSH:{self.hash}"
         head = head.encode()
-        try:
-            self.send(head)
-            self.recv(1024)
-        except Exception as e:
-            logging.error("Server header send/recv error: %s",
-                          e, exc_info=True)
+        self._send_and_ack(head)
 
     def newgame(self):
         """Report the start of a new game session to the server."""
@@ -821,6 +826,27 @@ class Server:
             hash_ = hash_ + ':' + self.user + ':' + str(time.time())
             self.hash = hashlib.shake_256(hash_.encode()).hexdigest(8)
         self.__srvhead('BEG')
+
+    def _safe_own_port(self):
+        """Return local socket port or -1 on error."""
+        try:
+            return self.sock.getsockname()[1]
+        except OSError as e:
+            logging.error("getsockname error: %s", e, exc_info=True)
+            return -1
+
+    def _send_and_ack(self, payload: bytes) -> None:
+        """Send payload and attempt to read an ACK, logging errors only.
+
+        Args:
+            payload (bytes): Encoded message to send.
+        """
+        try:
+            self.send(payload)
+            self.recv(1024)
+        except Exception as e:
+            logging.error("Server header send/recv error: %s",
+                          e, exc_info=True)
 
     def endgame(self, score, failcode, sig=-1):
         """Report the end of a game session to the server.
@@ -884,6 +910,110 @@ def make_sighand(server, playground):
     return _sighand
 
 
+def _determine_log_level(args) -> int:
+    """Translate CLI flags to a logging level.
+
+    Args:
+        args: Parsed argparse namespace with ``verbose``/``quiet``.
+
+    Returns:
+        int: One of logging.DEBUG/INFO/WARNING.
+    """
+    log_level = logging.INFO
+    if args.verbose:
+        log_level = logging.DEBUG
+    elif args.quiet:
+        log_level = logging.WARNING
+    return log_level
+
+
+def _configure_logging(args, log_level: int, logfile: str | None) -> None:
+    """Configure root logger to stderr and optional file.
+
+    Args:
+        args: Parsed argparse namespace with ``logfile``.
+        log_level (int): Logging level to use.
+        logfile (str | None): Path to logfile if provided.
+    """
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(log_level)
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)-3.3s %(message)s",
+        datefmt='%y%m%d %H:%M:%S'
+    )
+
+    stderr_handler = logging.StreamHandler(stream=sys.stderr)
+    stderr_handler.setFormatter(formatter)
+    stderr_handler.setLevel(log_level)
+    root_logger.addHandler(stderr_handler)
+
+    if args.logfile:
+        logfile = args.logfile
+        if os.path.exists(logfile):
+            mystat = os.stat(sys.argv[0])
+            lfstat = os.stat(logfile)
+            if mystat.st_dev == lfstat.st_dev and \
+               mystat.st_ino == lfstat.st_ino:
+                errprint("ERROR: Log file (-L) same as program file!")
+                raise SystemExit(EXIT_ARGS)
+        try:
+            file_handler = logging.FileHandler(logfile)
+            file_handler.setFormatter(formatter)
+            file_handler.setLevel(log_level)
+            root_logger.addHandler(file_handler)
+        except PermissionError:
+            errprint(f"ERROR: Can't log to file \"{logfile}\". "
+                     + "Check permissions!")
+            raise SystemExit(EXIT_ERR)
+    logging.info('Started')
+
+
+def _apply_cli_to_config(args, conf: Config) -> None:
+    """Apply parsed CLI arguments to configuration.
+
+    Args:
+        args: Parsed argparse namespace.
+        conf (Config): Configuration to mutate.
+    """
+    if args.config:
+        conf.readconf(args.config)
+
+    if args.rows:
+        conf.setconf(CNFKEY_ROWS[1], args.rows)
+
+    if args.cols:
+        conf.setconf(CNFKEY_COLS[1], args.cols)
+
+    if args.snakelen:
+        conf.setconf(CNFKEY_SLEN[1], args.snakelen)
+
+    if args.timeout:
+        conf.setconf(CNFKEY_TIMO[1], args.timeout)
+
+    if args.port:
+        conf.setconf(CNFKEY_PORT[1], args.port)
+
+    if args.host:
+        conf.setconf(CNFKEY_HOST[1], args.host)
+
+    if args.user:
+        if str.isascii(args.user) is not True:
+            errprint(CNFKEY_USER[0]
+                     + ": User name must only contain A-Z, a-z, 0-9!")
+            raise SystemExit(EXIT_SYNTAX)
+        if " " in args.user:
+            errprint(CNFKEY_USER[0]
+                     + ": User name may not contain blanks!")
+            raise SystemExit(EXIT_SYNTAX)
+        if len(args.user) < 1 or len(args.user) > USERML:
+            errprint(CNFKEY_USER[0]
+                     + ": User name must be 1-16 characters in length!")
+            raise SystemExit(EXIT_SYNTAX)
+        conf.setconf(CNFKEY_USER[1], args.user)
+
+
 def main() -> int:
     """Program entry point.
 
@@ -923,92 +1053,10 @@ def main() -> int:
                         help="Player's user name.")
     args = parser.parse_args()
 
-    # Determine log level
-    log_level = logging.INFO
-    if args.verbose:
-        log_level = logging.DEBUG
-    elif args.quiet:
-        log_level = logging.WARNING
+    log_level = _determine_log_level(args)
+    _configure_logging(args, log_level, logfile)
 
-    # Configure logging to stderr, and optionally to file
-    root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-    root_logger.setLevel(log_level)
-
-    formatter = logging.Formatter(
-        fmt="%(asctime)s %(levelname)-3.3s %(message)s",
-        datefmt='%y%m%d %H:%M:%S'
-    )
-
-    stderr_handler = logging.StreamHandler(stream=sys.stderr)
-    stderr_handler.setFormatter(formatter)
-    stderr_handler.setLevel(log_level)
-    root_logger.addHandler(stderr_handler)
-
-    if args.logfile:
-        # Set log file in addition to stderr
-        logfile = args.logfile
-        if os.path.exists(logfile):
-            mystat = os.stat(sys.argv[0])
-            lfstat = os.stat(logfile)
-            if mystat.st_dev == lfstat.st_dev and \
-               mystat.st_ino == lfstat.st_ino:
-                errprint("ERROR: Log file (-L) same as program file!")
-                return EXIT_ARGS
-        try:
-            file_handler = logging.FileHandler(logfile)
-            file_handler.setFormatter(formatter)
-            file_handler.setLevel(log_level)
-            root_logger.addHandler(file_handler)
-        except PermissionError:
-            errprint(f"ERROR: Can't log to file \"{logfile}\". "
-                     + "Check permissions!")
-            return EXIT_ERR
-    logging.info('Started')
-
-    if args.config:
-        # Read configuration from file
-        conf.readconf(args.config)
-
-    if args.rows:
-        # Set number of rows on playground
-        conf.setconf(CNFKEY_ROWS[1], args.rows)
-
-    if args.cols:
-        # Set number of columns on playground
-        conf.setconf(CNFKEY_COLS[1], args.cols)
-
-    if args.snakelen:
-        # Set initial snake length
-        conf.setconf(CNFKEY_SLEN[1], args.snakelen)
-
-    if args.timeout:
-        # Timeout in ms between movements
-        conf.setconf(CNFKEY_TIMO[1], args.timeout)
-
-    if args.port:
-        # Server port
-        conf.setconf(CNFKEY_PORT[1], args.port)
-
-    if args.host:
-        # Server host
-        conf.setconf(CNFKEY_HOST[1], args.host)
-
-    if args.user:
-        # User's nickname
-        if str.isascii(args.user) is not True:
-            errprint(CNFKEY_USER[0]
-                     + ": User name must only contain A-Z, a-z, 0-9!")
-            return EXIT_SYNTAX
-        if " " in args.user:
-            errprint(CNFKEY_USER[0]
-                     + ": User name may not contain blanks!")
-            return EXIT_SYNTAX
-        if len(args.user) < 1 or len(args.user) > USERML:
-            errprint(CNFKEY_USER[0]
-                     + ": User name must be 1-16 characters in length!")
-            return EXIT_SYNTAX
-        conf.setconf(CNFKEY_USER[1], args.user)
+    _apply_cli_to_config(args, conf)
 
     # Connect to server (if requested)
     server = Server(conf)

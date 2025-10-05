@@ -663,6 +663,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=Help.intro())
     parser.add_argument("-L", "--logfile", help="Specify name of log file.")
     parser.add_argument("-C", "--config", help="Read configuration from file.")
+    vgroup = parser.add_mutually_exclusive_group()
+    vgroup.add_argument("-v", "--verbose", action="store_true",
+                        help="Verbose logging (DEBUG)")
+    vgroup.add_argument("-q", "--quiet", action="store_true",
+                        help="Quiet logging (WARNING)")
     parser.add_argument("-" + CNFKEY_ROWS[0], "--" + CNFKEY_ROWS[1],
                         help="Playground height.")
     parser.add_argument("-" + CNFKEY_COLS[0], "--" + CNFKEY_COLS[1],
@@ -679,8 +684,30 @@ def main() -> int:
                         help="Player's user name.")
     args = parser.parse_args()
 
+    # Determine log level
+    log_level = logging.INFO
+    if args.verbose:
+        log_level = logging.DEBUG
+    elif args.quiet:
+        log_level = logging.WARNING
+
+    # Configure logging to stderr, and optionally to file
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(log_level)
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)-3.3s %(message)s",
+        datefmt='%y%m%d %H:%M:%S'
+    )
+
+    stderr_handler = logging.StreamHandler(stream=sys.stderr)
+    stderr_handler.setFormatter(formatter)
+    stderr_handler.setLevel(log_level)
+    root_logger.addHandler(stderr_handler)
+
     if args.logfile:
-        # Set log file
+        # Set log file in addition to stderr
         logfile = args.logfile
         if os.path.exists(logfile):
             mystat = os.stat(sys.argv[0])
@@ -690,16 +717,15 @@ def main() -> int:
                 errprint("ERROR: Log file (-L) same as program file!")
                 return EXIT_ARGS
         try:
-            logging.basicConfig(filename=logfile,
-                                format="%(asctime)s %(levelname)-3.3s "
-                                + "%(message)s",
-                                datefmt='%y%m%d %H:%M:%S',
-                                level=logging.INFO)
+            file_handler = logging.FileHandler(logfile)
+            file_handler.setFormatter(formatter)
+            file_handler.setLevel(log_level)
+            root_logger.addHandler(file_handler)
         except PermissionError:
             errprint(f"ERROR: Can't log to file \"{logfile}\". "
                      + "Check permissions!")
             return EXIT_ERR
-        logging.info('Started')
+    logging.info('Started')
 
     if args.config:
         # Read configuration from file

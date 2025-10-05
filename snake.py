@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.11
+#!/usr/bin/env python3.12
 """snake - a game to be run in a Linux or UNIX terminal.
 Call the program with --help or do python3.11 -m pydoc snake.
 

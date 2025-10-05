@@ -52,12 +52,30 @@ MSGSIZE = 1024
 
 
 def errprint(*args, **kargs):
-    """Print to stderr."""
+    """Print a message to stderr.
+
+    Args:
+        *args: Positional arguments forwarded to ``print``.
+        **kargs: Keyword arguments forwarded to ``print``.
+    """
     print(*args, file=sys.stderr, **kargs)
 
 
 class Display:
-    """Set up and restore the entire display."""
+    """Set up and restore the entire display.
+
+    Args:
+        rows (int): Number of rows for the playground.
+        cols (int): Number of columns for the playground.
+        timo (int): Timeout in milliseconds between key reads.
+
+    Attributes:
+        rows (int): Number of playground rows.
+        cols (int): Number of playground columns.
+        timo (int): Keyboard timeout in milliseconds.
+        win: Curses window handle for the playground.
+        graphics_active (bool): True when curses mode is active.
+    """
     graphics_active = False     # Graphics initialized?
 
     def __init__(self, rows, cols, timo=0):
@@ -67,18 +85,28 @@ class Display:
         self.win = self.graphact(rows, cols, timo)
 
     def getwin(self):
-        """Return window handler."""
+        """Return the curses window handle.
+
+        Returns:
+            Any: The curses window created by ``curses.newwin``.
+        """
         return self.win
 
     def graphact(self, rows=0, cols=0, timo=0):
-        """Switch terminal into graphics mode, or resume from it.
-        This function is assumed to be called once at startup to
-        initialize the entire display and set the playground size
-        at the same time. This is done by assigning proper values
-        to rows and cols.
-        The function shall also be called once before ending the
-        program, to restore the display. This is done by calling
-        without parameters.
+        """Switch terminal into graphics mode, or restore from it.
+
+        When called with positive ``rows`` and ``cols``, initializes
+        curses and creates the playground window. When called with
+        default values, restores the terminal to normal mode.
+
+        Args:
+            rows (int): Playground rows (>0 to activate, 0 to restore).
+            cols (int): Playground cols (>0 to activate, 0 to restore).
+            timo (int): Keyboard timeout in milliseconds.
+
+        Returns:
+            Any | None: The curses window handle when activating,
+            otherwise ``None`` when restoring.
         """
         mode = bool(rows > 0 and cols > 0)
         if not mode:
@@ -126,11 +154,21 @@ class Display:
 
 class Playground:
     """The visible area where the snake(s) move, including borders.
-    Each Playground object handles the area where snakes are running,
-    but the snakes themselves are not handled except for some
-    cleanup of snake tails.
-    Positioning of snakes and food is strictly separated from
-    visualization and steering input.
+    
+    Each ``Playground`` handles the 2D grid and its visual representation
+    via curses, but does not implement the snake logic itself beyond
+    marking/unmarking cells.
+
+    Args:
+        cnf (Config): Configuration provider for sizing and timing.
+        server (Server | None): Optional server connection used to
+            report gameplay events.
+
+    Attributes:
+        rows (int): Number of rows including borders.
+        cols (int): Number of columns including borders.
+        timo (int): Keyboard timeout in milliseconds.
+        win: Curses window handle.
     """
     # Visible components
     VIS_CLEANER = ' '   # Character to clean up with
@@ -165,14 +203,22 @@ class Playground:
             self.pgr[_][self.cols - 1] = self.OBJ_BORDER
 
     def __report(self, text):
-        """Report event to server, if connected."""
+        """Report an event to the server if connected.
+
+        Args:
+            text (str): The message to send (ASCII string).
+        """
         if not self.server:
             return
         self.server.send(text.encode())
         self.server.recv(MSGSIZE)
 
     def feed(self):
-        """Place food at random coordinate."""
+        """Place food at a random empty coordinate.
+
+        Side Effects:
+            Updates the internal grid, updates the display, and may log.
+        """
         while True:
             foodpos = [random.randint(1, self.rows - 2),
                        random.randint(1, self.cols - 2)]
@@ -189,7 +235,11 @@ class Playground:
         self.win.refresh()
 
     def bomb(self):
-        """Place bomb at random coordinate."""
+        """Place a bomb at a random empty coordinate.
+
+        Side Effects:
+            Updates the internal grid and updates the display.
+        """
         while True:
             bombpos = [random.randint(1, self.rows - 2),
                        random.randint(1, self.cols - 2)]
@@ -202,11 +252,19 @@ class Playground:
         self.win.refresh()
 
     def setcleanpos(self, pos):
-        """Save coordinates for a position that needs to be cleaned."""
+        """Save a coordinate that should be visually cleaned.
+
+        Args:
+            pos (list[int, int]): Row/column pair to blank on next draw.
+        """
         self.postoclean.insert(0, pos)
 
     def cleanpos(self, need_refresh=False):
-        """Visibly clean up the Playground."""
+        """Visibly clean previously marked positions.
+
+        Args:
+            need_refresh (bool): If True, refresh the window after cleanup.
+        """
         # Blank positions that were marked by call to setcleanpos()
         for _ in range(0, len(self.postoclean)):
             self.win.addch(int(self.postoclean[_][0]),
@@ -216,14 +274,29 @@ class Playground:
             self.win.refresh()
 
     def atpos(self, row, col):
-        """Return what is at the given position, an OBJ_-mnemonic."""
+        """Return what is at the given position.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+
+        Returns:
+            int: Bitmask containing OBJ_-mnemonics for the cell.
+        """
         return self.pgr[int(row)][int(col)]
 
     def markpos(self, row, col, what=OBJ_EMPTY) -> int:
-        """Mark this playground position as occupied by something
-        indicated by what, which must be an OBJ_-mnemonic.
-        If what is OBJ_EMPTY, all marks are reset at this position.
-        Returns previous value.
+        """Set a mark on a playground position.
+
+        If ``what`` is ``OBJ_EMPTY``, all marks are cleared at the position.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            what (int): Bitmask of OBJ_-mnemonics to set.
+
+        Returns:
+            int: Previous bitmask at the position.
         """
         was = self.atpos(int(row), int(col))
         self.pgr[int(row)][int(col)] |= what
@@ -236,9 +309,15 @@ class Playground:
         return was
 
     def unmarkpos(self, row, col, what) -> int:
-        """Remove a mark from given position.
-        Mark shall be an OBJ_-menmonic (set by markpos()).
-        Returns previous value.
+        """Remove a mark from a position.
+
+        Args:
+            row (int): Row index.
+            col (int): Column index.
+            what (int): Bitmask of OBJ_-mnemonics to clear.
+
+        Returns:
+            int: Previous bitmask at the position.
         """
         was = self.atpos(int(row), int(col))
         self.pgr[int(row)][int(col)] &= ~what
@@ -249,18 +328,27 @@ class Playground:
         return was
 
     def draw(self):
-        """Draw the playground."""
+        """Draw the playground border and refresh the window."""
         self.win.border(curses.ACS_VLINE)
         self.win.refresh()
 
     def keypause(self):
-        """Deactivate keyboard timeout and wait for keypress."""
+        """Deactivate keyboard timeout and block until a key is pressed."""
         self.win.timeout(-1)
         self.win.getch()
 
 
 class Worm:
-    """A Snake/Worm that crawls across the Playground."""
+    """A Snake/Worm that crawls across the Playground.
+
+    Args:
+        playground (Playground): The playground to move within.
+        cnf (Config): Configuration used for initial size and timing.
+        row (int | None): Optional initial head row (defaults to center).
+        col (int | None): Optional initial head column (defaults to center).
+        rstep (int | None): Initial row step (direction).
+        cstep (int | None): Initial column step (direction).
+    """
     # Movement directions
     STEP_UP = -1            # Row movement direction - up
     STEP_DOWN = 1           # Row movement direction - down
@@ -305,11 +393,11 @@ class Worm:
         self.fail = self.FAIL_NONE  # Reason for Game Over
 
     def __inclen(self):
-        """Increment length of snake."""
+        """Increment the target length of the snake."""
         self.length += self.cnf.getconf(CNFKEY_SLEN[1])
 
     def draw(self):
-        """Draw the Snake visually."""
+        """Draw the snake's head and body, and refresh the window."""
         self.pgr.cleanpos(False)
         # Head
         self.pgr.win.addch(int(self.poss[0][0]),
@@ -322,7 +410,11 @@ class Worm:
         self.pgr.win.refresh()
 
     def __step(self):
-        """Move the Snake in current direction."""
+        """Advance the snake one step in the current direction.
+
+        Returns:
+            int: A FAIL_-code indicating collision, or ``FAIL_NONE``.
+        """
         needfood = False
         if self.STEP_IDLE == self.rowstep and self.STEP_IDLE == self.colstep:
             # Snake is sleeping
@@ -368,22 +460,40 @@ class Worm:
         return self.FAIL_NONE
 
     def turn(self, rstep=None, cstep=None):
-        """Change current snake direction."""
+        """Change current snake direction.
+
+        Args:
+            rstep (int | None): New row step (use ``None`` to keep).
+            cstep (int | None): New column step (use ``None`` to keep).
+        """
         self.rowstep = rstep if rstep is not None else self.STEP_IDLE
         self.colstep = cstep if cstep is not None else self.STEP_IDLE
 
     def getscore(self):
-        """Return current score."""
+        """Return the current score.
+
+        Returns:
+            int: The current score value.
+        """
         return self.score
 
     def getfailcode(self):
-        """Return numerical reason for failed game."""
+        """Return the numerical reason for game over.
+
+        Returns:
+            int: One of the ``FAIL_*`` constants.
+        """
         return self.fail
 
     def getfailtext(self, fail=-1) -> str:
-        """Convert fail code (FAIL_-mnemonic) to text.
-        Without parameter, the object's failure text is returned.
-        With parameter, requested code is converted to text.
+        """Translate a failure code to human-readable text.
+
+        Args:
+            fail (int): Optional ``FAIL_*`` code. If ``-1``, use
+                the object's current failure.
+
+        Returns:
+            str: A descriptive failure string.
         """
         if -1 == fail:
             return self.FAILTEXT[self.fail]
@@ -396,7 +506,11 @@ class Worm:
             sys.exit(EXIT_PROG)
 
     def play(self):
-        """ Main loop. Returns failure as FAIL_-mnemonic """
+        """Run the main gameplay loop.
+
+        Returns:
+            int: Failure as a ``FAIL_*`` mnemonic.
+        """
         while self.FAIL_NONE == self.fail:
             key = self.pgr.win.getch()
             match key:
@@ -421,7 +535,7 @@ class Worm:
 
 
 class Help:
-    """Show help."""
+    """User-facing help texts and messages."""
     _usage_intromsg = \
         """A Linux/UNIX Snake game to play in the terminal and learn from.
         Use arrow-keys to change snake direction.
@@ -430,14 +544,22 @@ class Help:
 
     @classmethod
     def intro(cls):
-        """Print introductiory summary."""
+        """Return an introductory summary for CLI help.
+
+        Returns:
+            str: Short description of the game and controls.
+        """
         return cls._usage_intromsg
 
 
 # Configuration
 
 class Config:
-    """Configuration of one game instance."""
+    """Configuration for a single game instance.
+
+    Args:
+        conffile (str | None): Optional path to a configuration file.
+    """
 
     def __init__(self, conffile=None):
         self.conffile = conffile     # Configuration file
@@ -452,7 +574,12 @@ class Config:
             self.readconf(conffile)
 
     def readconf(self, conffile=None):
-        """Process configuration file."""
+        """Read and apply configuration values from a file.
+
+        Args:
+            conffile (str | None): Path to configuration file. If
+                ``None``, defaults to ``"snake.cnf"``.
+        """
         self.conffile = conffile if conffile is not None else "snake.cnf"
 
         try:
@@ -483,7 +610,12 @@ class Config:
             self.setconf(key, val)
 
     def setconf(self, key, val):
-        """Assign configurable value to a key."""
+        """Assign a configuration value to a key.
+
+        Args:
+            key (str): Configuration key (e.g., ``rows``, ``cols``).
+            val (str | int): Value to assign; type depends on key.
+        """
         try:
             if CNFKEY_ROWS[1] == key:
                 self.cnfval_rows = int(val)
@@ -513,8 +645,14 @@ class Config:
             sys.exit(EXIT_SYNTAX)
 
     def getconf(self, key):
-        """Return a configuration value.
-        key -- Configuration parameter name: CNFKEY_...[1]
+        """Return a configuration value by key.
+
+        Args:
+            key (str): Configuration parameter name
+                (e.g., ``rows``, ``timeout``).
+
+        Returns:
+            int | str: The configured value for the key.
         """
         if CNFKEY_ROWS[1] == key:
             return self.cnfval_rows
@@ -535,12 +673,12 @@ class Config:
 
 
 class Server:
-    """Handle connection to Snake server (snakesrv).
-    If both a server host name or IP address and a port to it is
-    assigned, the program shall connect to it. If none or only one
-    of the values is set, server connection will be silently ignored.
-    Connection uses TCP/IP sockets.
-    The server must be running.
+    """Handle connection to the optional Snake server.
+
+    Establishes a TCP/IP connection when both host and port are provided.
+
+    Args:
+        cnf (Config | None): Configuration providing host/port and user.
     """
 
     def __init__(self, cnf=None):
@@ -571,20 +709,38 @@ class Server:
             sys.exit(EXIT_ERR)
 
     def send(self, data):
-        """Send a sequence to the server if connected."""
+        """Send a byte sequence to the server if connected.
+
+        Args:
+            data (bytes): Raw bytes to send.
+        """
         if not self.use:
             return
         self.sock.sendall(data)
 
     def recv(self, maxlen=1024) -> str:
-        """Receive a string from server if connected."""
+        """Receive a string from the server if connected.
+
+        Args:
+            maxlen (int): Maximum number of bytes to receive.
+
+        Returns:
+            str | None: Decoded response or ``None`` if not connected.
+        """
         if not self.use:
             return None
         ret = self.sock.recv(maxlen).decode()
         return ret
 
     def __srvhead(self, tag, score=None, failcode=None, sig=None):
-        """Create and send header to server, if connected."""
+        """Create and send a protocol header to the server.
+
+        Args:
+            tag (str): One of ``'BEG'``, ``'END'``, ``'MRK'``, ``'UNM'``.
+            score (int | None): Score to report (for ``END``).
+            failcode (int | None): Failure code (for ``END``).
+            sig (int | None): Signal number (for ``END``).
+        """
         if not self.use:
             return
         ownport = self.sock.getsockname()[1]
@@ -611,7 +767,7 @@ class Server:
         self.recv(1024)
 
     def newgame(self):
-        """Report start of a new game to the server, if connected."""
+        """Report the start of a new game session to the server."""
         if self.use:
             hash_ = self.sock.getsockname()[0]
             hash_ = hash_ + ':' + str(self.sock.getsockname()[1])
@@ -620,24 +776,42 @@ class Server:
         self.__srvhead('BEG')
 
     def endgame(self, score, failcode, sig=-1):
-        """Report status about ended game to the server, if connected."""
+        """Report the end of a game session to the server.
+
+        Args:
+            score (int): Final score.
+            failcode (int): ``FAIL_*`` reason for game over.
+            sig (int): Signal received, or ``-1`` if none.
+        """
         self.__srvhead('END', score, failcode, sig)
 
     def stop(self):
-        """Close connection to server, if connected."""
+        """Close the server connection, if connected."""
         if self.use:
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
 
     def trap(self, sig):
-        """Terminate server connection on signal reception."""
+        """Terminate server connection on signal reception.
+
+        Args:
+            sig (int): Signal number received.
+        """
         if self.use:
             self.endgame(-1, -1, sig)
             self.stop()
 
 
 def make_exithand(server, playground):
-    """Create an exit handler that cleans up resources."""
+    """Create an exit handler that cleans up resources.
+
+    Args:
+        server (Server): Server instance to stop.
+        playground (Playground): Playground whose display to restore.
+
+    Returns:
+        Callable[[], None]: A zero-argument function for ``atexit``.
+    """
     def _exithand():
         server.stop()
         playground.display.graphact()
@@ -645,7 +819,15 @@ def make_exithand(server, playground):
 
 
 def make_sighand(server, playground):
-    """Create a signal handler that preserves curses and informs server."""
+    """Create a signal handler that preserves curses and informs server.
+
+    Args:
+        server (Server): Server instance to notify.
+        playground (Playground): Playground whose display to restore.
+
+    Returns:
+        Callable[[int, Any], None]: A signal handler function.
+    """
     def _sighand(signum, frame):
         del frame
         playground.display.graphact()
@@ -656,7 +838,15 @@ def make_sighand(server, playground):
 
 
 def main() -> int:
-    """Program entry point. Parses args, sets up resources, runs game."""
+    """Program entry point.
+
+    Parses CLI arguments, configures logging, initializes the server
+    connection and curses display, runs a single game, and prints the
+    result.
+
+    Returns:
+        int: An ``EXIT_*`` code indicating the outcome.
+    """
     conf = Config()
 
     # Command line options and switches

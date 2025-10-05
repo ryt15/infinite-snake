@@ -130,9 +130,17 @@ class Display:
             errprint("Minimum column size is 3.")
             sys.exit(EXIT_ARGS)
         # Initialize display
-        scr = curses.initscr()
-        curses.curs_set(0)
-        srows, scols = scr.getmaxyx()
+        try:
+            scr = curses.initscr()
+            try:
+                curses.curs_set(0)
+            except curses.error:
+                logging.debug('curses.curs_set not supported')
+            srows, scols = scr.getmaxyx()
+        except curses.error as e:
+            errprint("ERROR: Failed to initialize curses display")
+            logging.error("curses init error: %s", e, exc_info=True)
+            sys.exit(EXIT_ERR)
         # Playground too large?
         if rows > srows:
             curses.endwin()
@@ -145,9 +153,15 @@ class Display:
             errprint(f"Maximum column size is {scols}.")
             sys.exit(EXIT_ARGS)
         # Create the playground on the display
-        win = curses.newwin(rows, cols, 0, 0)
-        win.keypad(1)
-        win.timeout(timo)
+        try:
+            win = curses.newwin(rows, cols, 0, 0)
+            win.keypad(1)
+            win.timeout(timo)
+        except curses.error as e:
+            curses.endwin()
+            errprint("ERROR: Failed to create curses window")
+            logging.error("newwin error: %s", e, exc_info=True)
+            sys.exit(EXIT_ERR)
         self.graphics_active = True
         return win
 
@@ -583,20 +597,22 @@ class Config:
         self.conffile = conffile if conffile is not None else "snake.cnf"
 
         try:
-            conff = open(self.conffile)
-            cnf = conff.readlines()
-            conff.close()
-        except FileNotFoundError:
+            with open(self.conffile, encoding="utf-8") as conff:
+                cnf = conff.readlines()
+        except FileNotFoundError as e:
             errprint("Non-existing configuration file: " + self.conffile)
+            logging.error("Config read error: %s", e, exc_info=True)
             sys.exit(EXIT_ERR)
-        except PermissionError:
+        except PermissionError as e:
             errprint("Unreadable configuration file: " + self.conffile)
+            logging.error("Config permission error: %s", e, exc_info=True)
             sys.exit(EXIT_ERR)
-        except IsADirectoryError:
+        except IsADirectoryError as e:
             errprint("Configuration file is a directory: " + self.conffile)
+            logging.error("Config path is directory: %s", e, exc_info=True)
             sys.exit(EXIT_ERR)
         except Exception as e:
-            logging.debug(f"readconf exception {e}")
+            logging.error("Config file error: %s", e, exc_info=True)
             errprint(f"ERROR: Config file error {e}.")
             sys.exit(EXIT_ERR)
 
@@ -705,7 +721,21 @@ class Server:
             self.use = False
             errprint("Server " + host + " refuses connection on port "
                      + str(port) + ".")
-            self.sock.close()
+            logging.error("Connection refused to %s:%s", host, port,
+                          exc_info=True)
+            try:
+                self.sock.close()
+            except Exception:
+                pass
+            sys.exit(EXIT_ERR)
+        except OSError as e:
+            self.use = False
+            errprint("Network error connecting to server.")
+            logging.error("Socket connect error: %s", e, exc_info=True)
+            try:
+                self.sock.close()
+            except Exception:
+                pass
             sys.exit(EXIT_ERR)
 
     def send(self, data):
@@ -716,7 +746,11 @@ class Server:
         """
         if not self.use:
             return
-        self.sock.sendall(data)
+        try:
+            self.sock.sendall(data)
+        except OSError as e:
+            logging.error("Socket send error: %s", e, exc_info=True)
+            self.use = False
 
     def recv(self, maxlen=1024) -> str:
         """Receive a string from the server if connected.
@@ -729,7 +763,12 @@ class Server:
         """
         if not self.use:
             return None
-        ret = self.sock.recv(maxlen).decode()
+        try:
+            ret = self.sock.recv(maxlen).decode()
+        except OSError as e:
+            logging.error("Socket recv error: %s", e, exc_info=True)
+            self.use = False
+            return None
         return ret
 
     def __srvhead(self, tag, score=None, failcode=None, sig=None):
@@ -743,7 +782,11 @@ class Server:
         """
         if not self.use:
             return
-        ownport = self.sock.getsockname()[1]
+        try:
+            ownport = self.sock.getsockname()[1]
+        except OSError as e:
+            logging.error("getsockname error: %s", e, exc_info=True)
+            ownport = -1
         if "END" == tag:
             head = (
                 f"G>END,SCR:{score},SIG:{sig},FAI:{failcode}"
@@ -763,8 +806,12 @@ class Server:
         head = head + f",USR:{self.user}"
         head = head + f",HSH:{self.hash}"
         head = head.encode()
-        self.send(head)
-        self.recv(1024)
+        try:
+            self.send(head)
+            self.recv(1024)
+        except Exception as e:
+            logging.error("Server header send/recv error: %s",
+                          e, exc_info=True)
 
     def newgame(self):
         """Report the start of a new game session to the server."""
@@ -980,28 +1027,38 @@ def main() -> int:
     signal.signal(signal.SIGQUIT, sigh)
     signal.signal(signal.SIGTERM, sigh)
 
-    # Create playground objects
-    pgr.feed()   # First piece of food
-    pgr.bomb()   # First bomb
-    pgr.draw()   # Draw complete playground
+    try:
+        # Create playground objects
+        pgr.feed()   # First piece of food
+        pgr.bomb()   # First bomb
+        pgr.draw()   # Draw complete playground
 
-    # Create one snake
-    worm = Worm(pgr, conf)
+        # Create one snake
+        worm = Worm(pgr, conf)
 
-    # Determine initial moving direction
-    worm.turn(worm.STEP_UP, worm.STEP_IDLE)
+        # Determine initial moving direction
+        worm.turn(worm.STEP_UP, worm.STEP_IDLE)
 
-    # Draw the snake initially
-    worm.draw()
+        # Draw the snake initially
+        worm.draw()
 
-    # Start playing
-    worm.play()
+        # Start playing
+        worm.play()
+    except Exception as e:
+        # Ensure curses is restored and server is notified on errors
+        logging.error("Runtime error during game: %s", e, exc_info=True)
+        pgr.display.graphact()
+        server.trap(-1)
+        errprint("ERROR: An unexpected error occurred. See logs.")
+        return EXIT_ERR
 
     # Report to server (if any)
     server.endgame(worm.getscore(), worm.getfailcode())
 
-    pgr.keypause()
-    pgr.display.graphact()
+    try:
+        pgr.keypause()
+    finally:
+        pgr.display.graphact()
 
     # Display score
     print("Score:   " + str(worm.getscore()))

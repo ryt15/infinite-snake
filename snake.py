@@ -168,7 +168,7 @@ class Display:
 
 class Playground:
     """The visible area where the snake(s) move, including borders.
-    
+
     Each ``Playground`` handles the 2D grid and its visual representation
     via curses, but does not implement the snake logic itself beyond
     marking/unmarking cells.

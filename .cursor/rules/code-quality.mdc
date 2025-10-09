@@ -1,11 +1,38 @@
 ---
 alwaysApply: true
 ---
-## PEP 8 Compliance
-Ensure all code follows PEP 8: max 79 chars/line, snake_case vars, 4-space indents.
+## PEP 8 Compliance (Python)
+Ensure code follows PEP 8: max 79 chars/line, snake_case for variables/functions, 
+4-space indents, proper spacing around operators. Preserve functionality.
 
-## Docstrings
-Add Google-style docstrings to functions/classes: params, returns, purpose.
+## Docstrings (Python/C++)
+Add or improve docstrings for all functions, classes, and modules using Google 
+Python Style Guide (Python) or Doxygen style (C++). Include parameters, returns, 
+and purpose. Keep existing logic unchanged.
 
 ## Error Handling
-Wrap I/O/network in try-except; log to stderr via logging module.
+Wrap file operations, network calls, and user inputs in try-except (Python) or 
+try-catch (C++). Log errors to stderr using logging (Python) or std::cerr (C++). 
+Ensure graceful failure and preserve functionality.
+
+## Modularity
+Refactor large functions into smaller, single-responsibility units. Use classes or 
+modules to group related logic. Minimize global variables and ensure clear 
+interfaces for extensibility.
+
+## Code Clarity
+Remove redundant code, use descriptive variable/function names, and simplify 
+complex logic. Ensure code is self-explanatory for future maintainers without 
+changing behavior.
+
+## Type Safety (C++)/Type Hints (Python)
+Add type hints to Python functions (PEP 484). Use explicit types in C++ (e.g., 
+int32_t over int). Avoid implicit conversions to prevent bugs.
+
+## Resource Management
+Use RAII in C++ (e.g., std::unique_ptr) and context managers in Python (e.g., 
+`with` for files/sockets). Ensure resources are cleaned up properly.
+
+## Linting
+Fix all pylint (Python) or clang-tidy (C++) warnings, including unused variables, 
+missing imports, and style issues. Maintain existing functionality.

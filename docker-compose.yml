@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  snake-server:
+    build: .
+    container_name: snake-server
+    command: ["server"]
+    ports:
+      - "8888:8888"
+    restart: unless-stopped
+    networks:
+      - snake-network
+
+  snake-client:
+    build: .
+    container_name: snake-client
+    command: ["client", "snake-server", "8888"]
+    depends_on:
+      - snake-server
+    stdin_open: true
+    tty: true
+    networks:
+      - snake-network
+    profiles:
+      - client
+
+  snake-game:
+    build: .
+    container_name: snake-game
+    command: ["game"]
+    stdin_open: true
+    tty: true
+    profiles:
+      - standalone
+
+networks:
+  snake-network:
+    driver: bridge
